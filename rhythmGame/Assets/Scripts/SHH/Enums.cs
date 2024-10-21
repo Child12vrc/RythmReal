@@ -26,6 +26,16 @@ namespace RhythmGame
             NEGATIVE
 
         }
+        public enum NoteType
+        {
+            None = 0,    
+            SingleNote = 1,
+            LongNoteStart = 2,
+            LongNoteEnd = 3,
+            Effect1 = 4,
+            Effect2 = 5,
+            CameraEffect3 = 6
+        }
     }
 }
 
