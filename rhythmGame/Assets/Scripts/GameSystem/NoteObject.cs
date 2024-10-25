@@ -1,38 +1,28 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class NoteObject : MonoBehaviour
 {
     public Sprite[] NoteSprites = new Sprite[3];
-    public Note note;               //노트 정보
-    public float speed;             //노트 이동 속도 
-    public float hitPosition;       //판정 위치 
-    public float startTime;         //게임 시작 시간
+    public Note note;
+    public float speed;
+    public float hitPosition;
+    public float startTime;
 
     public GameObject[] HitCheckEffect = new GameObject[5];
 
     private NoteManager noteManager;
     private SpriteRenderer noteImage;
 
-    //노트 오브젝ㅌㅡ 초기화
-
-    public void Initialized(Note note, float speed, float hitPosition, float startTime)
+    // yPos 값을 매핑하는 Dictionary 추가
+    private Dictionary<int, float> yPosMap = new Dictionary<int, float>
     {
-        this.note = note;
-        this.speed = speed;
-        this.hitPosition = hitPosition;
-        this.startTime = startTime;
+        { 1, -1.5f },
+        { 2, 0.2f },
+        { 3, -0.65f }
+    };
 
-        //노트 초기 위치 설정
-        float initalDistance = speed * (note.startTime - (Time.time - startTime));
-        transform.position = new Vector3(hitPosition + initalDistance, yPos(note.noteValue), 0);
-
-        //노트 이미지 설정
-        noteImage.sprite = NoteSprites[note.noteValue - 1];
-    }
     private void Awake()
     {
         noteImage = GetComponent<SpriteRenderer>();
@@ -43,75 +33,90 @@ public class NoteObject : MonoBehaviour
         noteManager = NoteManager.instance;
     }
 
-    // Update is called once per frame
+    // NoteObject 초기화 메서드 수정 (5개의 매개변수 추가)
+    public void Initialized(Note note, float speed, Vector3 startPosition, Vector3 endPosition, float startTime)
+    {
+        this.note = note;
+        this.speed = speed;
+        this.startTime = startTime;
+
+        // 초기 위치 설정
+        transform.position = new Vector3(startPosition.x, GetYPos(note.noteValue), startPosition.z);
+
+        // 노트 이미지 설정
+        noteImage.sprite = NoteSprites[note.noteValue - 1];
+    }
+
     void Update()
     {
-        //노트 이동 
+        // 노트 이동
         transform.Translate(Vector3.left * speed * Time.deltaTime);
 
-        //판정 위치를 지나면 파괴
-        if(transform.position.x <= hitPosition - 1)
+        // 판정 위치를 지나면 처리
+        if (transform.position.x <= hitPosition - 1)
         {
-            noteManager.notePoolEnqueue(this);
-            noteManager.poolManager.ReturnToPool(this.gameObject);
+            ReturnNoteToPool();
             NoteManager.instance.scoreManager.AddScore(Timing.Miss);
-            Instantiate(HitCheckEffect[4], transform.position, HitCheckEffect[3].transform.rotation);
-            //Debug.Log("Miss");
+            Instantiate(HitCheckEffect[4], transform.position, HitCheckEffect[4].transform.rotation);
         }
     }
 
-    public void HitCheck(int noteindex)
+    // 판정 체크
+    public void HitCheck(int noteIndex)
     {
         float distance = Mathf.Abs(transform.position.x - hitPosition);
 
         if (distance > 2) return;
 
-        if (note.noteValue == noteindex)
+        if (note.noteValue == noteIndex)
         {
+            Timing scoreTiming;
+            GameObject hitEffect;
+
             if (distance < 0.5f)
             {
-                //Debug.Log("Perfect");
-
-                Instantiate(HitCheckEffect[0], transform.position, HitCheckEffect[0].transform.rotation);
-                NoteManager.instance.scoreManager.AddScore(Timing.Perfect);
+                scoreTiming = Timing.Perfect;
+                hitEffect = HitCheckEffect[0];
             }
             else if (distance < 0.8f)
             {
-                //Debug.Log("Great");
-                Instantiate(HitCheckEffect[1], transform.position, HitCheckEffect[1].transform.rotation);
-                NoteManager.instance.scoreManager.AddScore(Timing.Great);
+                scoreTiming = Timing.Great;
+                hitEffect = HitCheckEffect[1];
             }
             else if (distance < 1.1f)
             {
-               // Debug.Log("Good");
-                Instantiate(HitCheckEffect[2], transform.position, HitCheckEffect[2].transform.rotation);
-                NoteManager.instance.scoreManager.AddScore(Timing.Good);
+                scoreTiming = Timing.Good;
+                hitEffect = HitCheckEffect[2];
             }
             else
             {
-                //Debug.Log("Bad");
-                Instantiate(HitCheckEffect[3], transform.position, HitCheckEffect[3].transform.rotation);
-                NoteManager.instance.scoreManager.AddScore(Timing.Bad);
+                scoreTiming = Timing.Bad;
+                hitEffect = HitCheckEffect[3];
             }
+
+            NoteManager.instance.scoreManager.AddScore(scoreTiming);
+            Instantiate(hitEffect, transform.position, hitEffect.transform.rotation);
         }
         else
-        {           
-            noteManager.notePoolEnqueue(this);
-            noteManager.poolManager.ReturnToPool(this.gameObject);
+        {
             NoteManager.instance.scoreManager.AddScore(Timing.Miss);
-            Instantiate(HitCheckEffect[4], transform.position, HitCheckEffect[3].transform.rotation);
-             
+            Instantiate(HitCheckEffect[4], transform.position, HitCheckEffect[4].transform.rotation);
         }
-      
-        NoteManager.instance.notePoolEnqueue(this);
+
+        ReturnNoteToPool();
     }
 
-    private float yPos(int value)
+    // 노트를 풀로 되돌리는 공통 메서드
+    private void ReturnNoteToPool()
     {
-        if(value == 1) return -1.5f;
-        else if(value == 2) return 0.2f;
-        else if (value == 3) return -0.65f;
+        noteManager.notePoolEnqueue(this);
+        noteManager.poolManager.ReturnToPool(this.gameObject);
+        noteManager.nowNotes.Remove(this);
+    }
 
-        return 0;
+    // yPos 매핑 값을 반환
+    private float GetYPos(int value)
+    {
+        return yPosMap.ContainsKey(value) ? yPosMap[value] : 0f;
     }
 }

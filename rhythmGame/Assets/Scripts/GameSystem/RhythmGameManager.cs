@@ -63,7 +63,7 @@ public class RhythmGameManager : MonoBehaviour
                 {
                     float startTime = beatIndex * 60f / sequenceData.bpm;
                     float durtaion = noteVaule * 60f  / sequenceData.bpm;
-                    Note note = new Note(trackIndex, startTime, durtaion, noteVaule);
+                    Note note = new Note(trackIndex, startTime, durtaion, noteVaule, Vector3.zero, Vector3.zero);
                     noteManager.AddNote(note);
                 }
             }
