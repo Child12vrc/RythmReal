@@ -1,122 +1,109 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class NoteObject : MonoBehaviour
 {
-    public Sprite[] NoteSprites = new Sprite[3];
-    public Note note;
-    public float speed;
-    public float hitPosition;
-    public float startTime;
+    private Note noteData;
+    private float speed;
+    private Vector3 startPosition;
+    private Vector3 targetPosition;
+    private float startTime;
+    private float journeyLength;
+    private float startJourneyTime;
+    private bool isInitialized = false;
+    private bool isMissed = false;
+    private float exactHitTime;
+    private float beatDuration;
+    private NotePool pool;
 
-    public GameObject[] HitCheckEffect = new GameObject[5];
-
-    private NoteManager noteManager;
-    private SpriteRenderer noteImage;
-
-    // yPos 값을 매핑하는 Dictionary 추가
-    private Dictionary<int, float> yPosMap = new Dictionary<int, float>
+    public void Initialize(Note note, float noteSpeed, Transform startPos, Transform targetPos, float gameStartTime, NotePool notePool, float beatDur)
     {
-        { 1, -1.5f },
-        { 2, 0.2f },
-        { 3, -0.65f }
-    };
+        if (startPos == null || targetPos == null)
+        {
+            Debug.LogError("Start or Target position is null!");
+            return;
+        }
 
-    private void Awake()
-    {
-        noteImage = GetComponent<SpriteRenderer>();
+        noteData = note;
+        speed = noteSpeed;
+        beatDuration = beatDur;
+        startPosition = startPos.position;
+        targetPosition = targetPos.position;
+        startTime = gameStartTime;
+        pool = notePool;
+
+        transform.position = startPosition;
+        transform.rotation = Quaternion.Euler(90, 0, 0);
+
+        journeyLength = Vector3.Distance(startPosition, targetPosition);
+        startJourneyTime = Time.time;
+        // 비트 타이밍을 고려한 정확한 히트 타임 계산
+        exactHitTime = startTime + note.startTime + beatDuration;
+
+        isInitialized = true;
+        isMissed = false;
     }
-
-    void Start()
-    {
-        noteManager = NoteManager.instance;
-    }
-
-    // NoteObject 초기화 메서드 수정 (5개의 매개변수 추가)
-    public void Initialized(Note note, float speed, Vector3 startPosition, Vector3 endPosition, float startTime)
-    {
-        this.note = note;
-        this.speed = speed;
-        this.startTime = startTime;
-
-        // 초기 위치 설정
-        transform.position = new Vector3(startPosition.x, GetYPos(note.noteValue), startPosition.z);
-
-        // 노트 이미지 설정
-        noteImage.sprite = NoteSprites[note.noteValue - 1];
-    }
-
     void Update()
     {
-        // 노트 이동
-        transform.Translate(Vector3.left * speed * Time.deltaTime);
+        if (!isInitialized) return;
 
-        // 판정 위치를 지나면 처리
-        if (transform.position.x <= hitPosition - 1)
+        float currentTime = Time.time;
+        float progress = (currentTime - startJourneyTime) / (exactHitTime - startJourneyTime);
+
+        if (progress <= 1.0f)
         {
-            ReturnNoteToPool();
-            NoteManager.instance.scoreManager.AddScore(Timing.Miss);
-            Instantiate(HitCheckEffect[4], transform.position, HitCheckEffect[4].transform.rotation);
-        }
-    }
-
-    // 판정 체크
-    public void HitCheck(int noteIndex)
-    {
-        float distance = Mathf.Abs(transform.position.x - hitPosition);
-
-        if (distance > 2) return;
-
-        if (note.noteValue == noteIndex)
-        {
-            Timing scoreTiming;
-            GameObject hitEffect;
-
-            if (distance < 0.5f)
-            {
-                scoreTiming = Timing.Perfect;
-                hitEffect = HitCheckEffect[0];
-            }
-            else if (distance < 0.8f)
-            {
-                scoreTiming = Timing.Great;
-                hitEffect = HitCheckEffect[1];
-            }
-            else if (distance < 1.1f)
-            {
-                scoreTiming = Timing.Good;
-                hitEffect = HitCheckEffect[2];
-            }
-            else
-            {
-                scoreTiming = Timing.Bad;
-                hitEffect = HitCheckEffect[3];
-            }
-
-            NoteManager.instance.scoreManager.AddScore(scoreTiming);
-            Instantiate(hitEffect, transform.position, hitEffect.transform.rotation);
+            transform.position = Vector3.Lerp(startPosition, targetPosition, progress);
         }
         else
         {
-            NoteManager.instance.scoreManager.AddScore(Timing.Miss);
-            Instantiate(HitCheckEffect[4], transform.position, HitCheckEffect[4].transform.rotation);
+            float overDistance = (progress - 1.0f) * journeyLength;
+            Vector3 direction = (targetPosition - startPosition).normalized;
+            transform.position = targetPosition + (direction * overDistance);
+
+            if (!isMissed && overDistance > 1.0f)
+            {
+                isMissed = true;
+                OnNoteMissed();
+                // Miss 판정 후 일정 거리 이상 지나면 풀로 반환
+                if (overDistance > 2.0f)
+                {
+                    ReturnToPool();
+                }
+            }
         }
 
-        ReturnNoteToPool();
+        transform.rotation = Quaternion.Euler(90, 0, 0);
     }
 
-    // 노트를 풀로 되돌리는 공통 메서드
-    private void ReturnNoteToPool()
+    private void OnNoteMissed()
     {
-        noteManager.notePoolEnqueue(this);
-        noteManager.poolManager.ReturnToPool(this.gameObject);
-        noteManager.nowNotes.Remove(this);
+        Debug.Log($"Note Missed! Track: {noteData.trackIndex}");
+
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            renderer.material.color = Color.gray;
+        }
+
+        // 여기에 Miss 이벤트 추가
+        //GameManager.Instance?.OnNoteMissed(noteData);
     }
 
-    // yPos 매핑 값을 반환
-    private float GetYPos(int value)
+    public void Hit()
     {
-        return yPosMap.ContainsKey(value) ? yPosMap[value] : 0f;
+        // 노트 히트 시 호출
+        ReturnToPool();
+    }
+
+    private void ReturnToPool()
+    {
+        if (pool != null)
+        {
+            isInitialized = false;
+            pool.ReturnNote(this);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 }

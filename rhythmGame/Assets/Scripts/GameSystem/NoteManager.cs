@@ -1,108 +1,232 @@
+using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.SceneManagement;
+
+
 
 public class NoteManager : MonoBehaviour
 {
-    public static NoteManager instance;
-
-    public ScoreManager scoreManager;
-    public Player player;
-    public PoolManager poolManager;
-
     public AudioClip audioClip;
     public List<Note> notes = new List<Note>();
     public float bpm = 120f;
     public float speed = 1f;
     public GameObject notePrefabs;
-
-    public float audioLatency = 0.1f;
-    public float hitPosition = -8.0f;
+    public float audioLatency = 0.1f;  // 오디오 레이턴시
     public float noteSpeed = 10;
-
     private AudioSource audioSource;
     private float startTime;
-    [SerializeField] private List<Note> activeNotes = new List<Note>();
-
-    public List<NoteObject> nowNotes = new List<NoteObject>();
-
-    private float spawnOffset;
-
+    private List<Note> activeNotes = new List<Note>();
+    private float[] spawnOffsets;
     public bool debugMode = false;
-    public GameObject hitPositionMarker;
-
     public float initialDelay = 3f;
+    private float audioStartTime;  // 실제 음악이 시작되는 시간
 
-    public Queue<NoteObject> notePool = new Queue<NoteObject>();
+    public Transform[] spawnPoints;
+    public Transform[] hitPoints;
 
-    private bool GameOver = false;
+    private bool isInitialized = false;
+    private float songPosition = 0f;  // 현재 곡의 진행 시간
+    private NotePool notePool;
 
-    private void Awake()
+    private AudioVisualizer audioVisualizer;
+    public GameObject[] visualizerObjects; // Inspector에서 설정할 시각화 오브젝트 배열
+
+    public void Initialize()
     {
-        instance = this;
-    }
+        // 노트 풀 초기화
+        GameObject poolObject = new GameObject("NotePool");
+        poolObject.transform.SetParent(transform);
+        notePool = poolObject.AddComponent<NotePool>();
+        notePool.Initialize(notePrefabs);
 
-    // 게임 초기화
-    public void Initialized()
-    {
+        // 오디오 시각화 설정
+        audioVisualizer = gameObject.AddComponent<AudioVisualizer>();
+        audioVisualizer.visualizerObjects = visualizerObjects;
+
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.clip = audioClip;
-        startTime = Time.time + initialDelay;
+
+        startTime = Time.time;
+        audioStartTime = startTime + initialDelay;
+
         activeNotes.Clear();
         activeNotes.AddRange(notes);
-        spawnOffset = (10 - hitPosition) / noteSpeed;
+        activeNotes.Sort((a, b) => a.startTime.CompareTo(b.startTime));
+
+        CalculateSpawnOffsets();
+
+
+
+           // 오디오 분석을 위한 설정
+        audioSource.playOnAwake = false;
 
         if (debugMode)
         {
-            CreateHitPositionMarker();
+            CreateDebugLines();
         }
 
-        AudioPlay();
+        StartCoroutine(StartAudioWithDelay());
+        isInitialized = true;
     }
 
-    private void AudioPlay()
+
+
+
+    private IEnumerator StartAudioWithDelay()
     {
-        double StartTime = AudioSettings.dspTime + initialDelay;
-        audioSource.PlayScheduled(StartTime);
+        yield return new WaitForSeconds(initialDelay - audioLatency);
+        audioSource.Play();
+    }
+    private void CalculateSpawnOffsets()
+    {
+        if (spawnPoints == null || hitPoints == null || spawnPoints.Length != hitPoints.Length)
+        {
+            Debug.LogError("Spawn points and hit points must be set and have the same length!");
+            return;
+        }
+
+        spawnOffsets = new float[spawnPoints.Length];
+
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            float distance = Vector3.Distance(spawnPoints[i].position, hitPoints[i].position);
+            // BPM을 고려한 노트 이동 시간 계산
+            float beatDuration = 60f / bpm;  // 한 비트 당 시간(초)
+            spawnOffsets[i] = distance / noteSpeed;
+
+            if (debugMode)
+            {
+                Debug.Log($"Track {i} - Distance: {distance:F3}, Spawn Offset: {spawnOffsets[i]:F3}, Beat Duration: {beatDuration:F3}");
+            }
+        }
     }
 
     void Update()
     {
-        float currentTime = Time.time - startTime;
+        if (!isInitialized || spawnPoints == null || hitPoints == null || spawnPoints.Length == 0) return;
 
-        if (currentTime >= audioSource.clip.length + 2f || scoreManager.HP <= 0)
-        {
-            if (!GameOver)
-            {
-                GameOver = true;
-                scoreManager.SendScore();
-                if (currentTime >= audioSource.clip.length + 2f)
-                {
-                    SceneManager.LoadScene("ScoreScene");
-                }
-                else if (scoreManager.HP <= 0)
-                {
-                    SceneManager.LoadScene("GameOverScene");
-                }
-            }
-            return;
-        }
+        // 현재 곡의 진행 시간 계산 (비트 타이밍 고려)
+        songPosition = (Time.time - audioStartTime) + audioLatency;
 
-        // 활성화된 노트를 처리
+        // 노트 생성 처리
         for (int i = activeNotes.Count - 1; i >= 0; i--)
         {
             Note note = activeNotes[i];
-            if (currentTime >= note.startTime - spawnOffset && currentTime < note.startTime + note.duration)
+            int trackIndex = Mathf.Clamp(note.trackIndex, 0, spawnPoints.Length - 1);
+            float spawnOffset = spawnOffsets[trackIndex];
+            float beatDuration = 60f / bpm;  // 한 비트 당 시간(초)
+
+            // 노트 생성 시점 계산 (비트 타이밍 고려)
+            float spawnTime = note.startTime - spawnOffset;
+
+            // songPosition이 0보다 작으면 아직 initialDelay 시간
+            if (songPosition < 0) continue;
+
+            if (songPosition >= spawnTime && songPosition < note.startTime + note.duration)
             {
-                GameObject temp = poolManager.SpawnFromPool("Note", note.startPosition, Quaternion.identity);
-                temp.GetComponent<NoteObject>().Initialized(note, noteSpeed, note.startPosition, note.endPosition, startTime);
-                nowNotes.Add(temp.GetComponent<NoteObject>());
+                if (debugMode)
+                {
+                    Debug.Log($"Before spawn - Song Pos: {songPosition:F3}, Spawn Time: {spawnTime:F3}, Note Start: {note.startTime:F3}");
+                }
+
+                SpawnNoteObject(note);
+                activeNotes.RemoveAt(i);
+
+                if (debugMode)
+                {
+                    Debug.Log($"Spawned note at {songPosition:F3}, Should hit at {note.startTime:F3}");
+                }
+            }
+            else if (songPosition >= note.startTime + note.duration)
+            {
                 activeNotes.RemoveAt(i);
             }
-            else if (currentTime >= note.startTime + note.duration)
+        }
+
+        if (debugMode && Time.frameCount % 60 == 0)
+        {
+            float beatDuration = 60f / bpm;
+            float currentBeat = songPosition / beatDuration;
+            Debug.Log($"Song Position: {songPosition:F3}, Beat: {currentBeat:F2}, Audio Time: {audioSource.time:F3}");
+        }
+    }
+
+    void OnGUI()
+    {
+        if (debugMode && isInitialized)
+        {
+            float beatDuration = 60f / bpm;
+            float currentBeat = songPosition / beatDuration;
+
+            GUI.Label(new Rect(10, 10, 200, 20), $"Song Time: {songPosition:F3}");
+            GUI.Label(new Rect(10, 30, 200, 20), $"Audio Time: {audioSource.time:F3}");
+            GUI.Label(new Rect(10, 50, 200, 20), $"Current Beat: {currentBeat:F2}");
+            GUI.Label(new Rect(10, 70, 200, 20), $"Beat Duration: {beatDuration:F3}");
+            GUI.Label(new Rect(10, 90, 200, 20), $"Spawn Offset: {(spawnOffsets.Length > 0 ? spawnOffsets[0].ToString("F3") : "N/A")}");
+        }
+    }
+
+    private void SpawnNoteObject(Note note)
+    {
+        int trackIndex = Mathf.Clamp(note.trackIndex, 0, spawnPoints.Length - 1);
+
+        // 풀에서 노트 가져오기
+        NoteObject noteComponent = notePool.GetNote();
+        noteComponent.transform.position = spawnPoints[trackIndex].position;
+        noteComponent.transform.rotation = spawnPoints[trackIndex].rotation;
+
+        // BPM 정보도 전달
+        float beatDuration = 60f / bpm;
+        noteComponent.Initialize(note, noteSpeed, spawnPoints[trackIndex], hitPoints[trackIndex], audioStartTime, notePool, beatDuration);
+    }
+
+
+    private void CreateDebugLines()
+    {
+        if (spawnPoints == null || hitPoints == null) return;
+
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            // 시작점과 도착점 사이에 선 그리기
+            GameObject lineObject = new GameObject($"DebugLine_{i}");
+            LineRenderer line = lineObject.AddComponent<LineRenderer>();
+            line.positionCount = 2;
+            line.SetPosition(0, spawnPoints[i].position);
+            line.SetPosition(1, hitPoints[i].position);
+            line.startWidth = 0.1f;
+            line.endWidth = 0.1f;
+
+            // 판정 위치에 큐브 표시
+            GameObject hitMarker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            hitMarker.transform.position = hitPoints[i].position;
+            hitMarker.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+            hitMarker.name = $"HitMarker_{i}";
+        }
+    }
+
+    public float GetCurrentSongTime()
+    {
+        return songPosition;
+    }
+
+
+    void OnDrawGizmos()
+    {
+        if (spawnPoints == null || hitPoints == null) return;
+
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            if (spawnPoints[i] != null && hitPoints[i] != null)
             {
-                activeNotes.RemoveAt(i);
+                // 시작점과 도착점을 선으로 연결
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawLine(spawnPoints[i].position, hitPoints[i].position);
+
+                // 시작점과 도착점을 구체로 표시
+                Gizmos.color = Color.green;
+                Gizmos.DrawWireSphere(spawnPoints[i].position, 0.3f);
+                Gizmos.color = Color.red;
+                Gizmos.DrawWireSphere(hitPoints[i].position, 0.3f);
             }
         }
     }
@@ -112,31 +236,14 @@ public class NoteManager : MonoBehaviour
         notes.Add(note);
     }
 
-    public void SpawnNoteObject(Note note)
-    {
-        GameObject noteObject = Instantiate(notePrefabs, note.startPosition, Quaternion.identity);
-        noteObject.GetComponent<NoteObject>().Initialized(note, noteSpeed, note.startPosition, note.endPosition, startTime);
-        nowNotes.Add(noteObject.GetComponent<NoteObject>());
-    }
-
-    // 노트를 풀로 되돌리는 메서드
-    public void notePoolEnqueue(NoteObject targetNote)
-    {
-        notePool.Enqueue(targetNote);
-        targetNote.gameObject.SetActive(false);
-        nowNotes.Remove(targetNote);
-    }
-
-    // 노트 이동 속도 설정 메서드
     public void SetSpeed(float newSpeed)
     {
         speed = newSpeed;
+        CalculateSpawnOffsets();
     }
 
-    private void CreateHitPositionMarker()
+    public void AdjustAudioLatency(float latency)
     {
-        hitPositionMarker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        hitPositionMarker.transform.position = new Vector3(hitPosition, 0, 0);
-        hitPositionMarker.transform.localScale = new Vector3(0.1f, 10.0f, 1.0f);
+        audioLatency = latency;
     }
 }

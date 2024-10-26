@@ -45,24 +45,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7e30c3731a0cad4989a94631b8d25f4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  NoteSprites:
-  - {fileID: 1300262439, guid: 6e23785092d54d14a8cd7c5c573a75a8, type: 3}
-  - {fileID: 492833941, guid: 6e23785092d54d14a8cd7c5c573a75a8, type: 3}
-  - {fileID: -776776028, guid: 6e23785092d54d14a8cd7c5c573a75a8, type: 3}
-  note:
-    trackIndex: 0
-    startTime: 0
-    duration: 0
-    noteValue: 0
-  speed: 0
-  hitPosition: 0
-  startTime: 0
-  HitCheckEffect:
-  - {fileID: 4727939015662452104, guid: cc76b67c406e1904ab0892fe988e778a, type: 3}
-  - {fileID: 7001069078184306296, guid: 9e286ea1a7e1ad04bb9922dbe065451d, type: 3}
-  - {fileID: 7763263528591904427, guid: 933ccdbfadeff1041aa5689afeb5aa3b, type: 3}
-  - {fileID: 4894684729573696719, guid: 5d305e46854eaab42801120fe52beca6, type: 3}
-  - {fileID: 2419567808684856234, guid: ba21eccf997de4147b0f1e1a30143be3, type: 3}
 --- !u!1001 &3115121983247582041
 PrefabInstance:
   m_ObjectHideFlags: 0

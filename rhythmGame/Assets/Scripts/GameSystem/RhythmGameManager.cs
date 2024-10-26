@@ -4,21 +4,18 @@ using UnityEngine;
 
 public class RhythmGameManager : MonoBehaviour
 {
-    public SequenceData sequenceData;
-    public NoteManager noteManager;
-    public float playbackSpeed = 1.0f;
+    public SequenceData sequenceData;                       //시퀸스 데이터
+    public NoteManager noteManager;                         //노트 매니저
+    public float playbackSpeed = 1.0f;                      //재생 속도
+    private bool notesGenerated = false;                    //노트 생성 완료 플레그 
 
-    public bool IsDebug = false;                //디버그 모드 활성화
 
-    private bool notesGenerated = false;
-
+    // Start is called before the first frame update
     void Start()
     {
-        sequenceData = GameManager.Instance.LevelData.GetLevelObject().noteData;
-
         if (sequenceData == null)
         {
-            Debug.LogError("sequenceData null");
+            Debug.LogError("시퀀스 데이터 없음");
             return;
         }
 
@@ -26,7 +23,7 @@ public class RhythmGameManager : MonoBehaviour
 
         if (sequenceData.trackNotes == null || sequenceData.trackNotes.Count == 0)
         {
-            initializeTrackNotes();
+            InitializeTrackNotes();
         }
         //매니저에 시퀀스 데이터를 가져와서 맵핑 시킨다.
         noteManager.audioClip = sequenceData.audioClip;
@@ -34,10 +31,12 @@ public class RhythmGameManager : MonoBehaviour
         noteManager.SetSpeed(playbackSpeed);
 
         GenerateNotes();
-        noteManager.Initialized();
+        noteManager.Initialize();
     }
 
-    private void initializeTrackNotes()
+
+    //트렉 노트 초기화 
+    private void InitializeTrackNotes()
     {
         sequenceData.trackNotes = new List<List<int>>();
         for (int i = 0; i < sequenceData.numberOfTracks; i++)
@@ -46,24 +45,23 @@ public class RhythmGameManager : MonoBehaviour
         }
     }
 
-    //노트 생성
+    //노트 생성 
     private void GenerateNotes()
     {
-        if (notesGenerated) return;         //이미 노트가 생성되었다면 중복 생성 방지
+        if (notesGenerated) return;                     //이미 노트가 생성되었다면 중복 생성 방지
 
-        noteManager.notes.Clear();          //노트 매니저에 접근하여 노트 초기화
+        noteManager.notes.Clear();                      //노트 매니저에 접근하여 노트 초기화
 
-        for(int trackIndex = 0;  trackIndex < sequenceData.trackNotes.Count; trackIndex++)      //노트 트랙 수
+        for (int trackIndex = 0; trackIndex < sequenceData.trackNotes.Count; trackIndex++)      //노트 트랙 수
         {
-            for(int beatIndex = 0; beatIndex < sequenceData.trackNotes[trackIndex].Count; beatIndex++)
+            for (int beatIndex = 0; beatIndex < sequenceData.trackNotes[trackIndex].Count; beatIndex++) //해당 트랙의 노트 
             {
-                int noteVaule = sequenceData.trackNotes[trackIndex][beatIndex];
-
-                if(noteVaule != 0)
+                int noteValue = sequenceData.trackNotes[trackIndex][beatIndex];
+                if (noteValue != 0)
                 {
                     float startTime = beatIndex * 60f / sequenceData.bpm;
-                    float durtaion = noteVaule * 60f  / sequenceData.bpm;
-                    Note note = new Note(trackIndex, startTime, durtaion, noteVaule, Vector3.zero, Vector3.zero);
+                    float durtaion = noteValue * 60f / sequenceData.bpm;
+                    Note note = new Note(trackIndex, startTime, durtaion);
                     noteManager.AddNote(note);
                 }
             }
@@ -75,19 +73,19 @@ public class RhythmGameManager : MonoBehaviour
     public void SetPlaybackSpeed(float speed)
     {
         playbackSpeed = speed;
-        noteManager.SetSpeed(speed);        //스피드를 받아서 노트 매니저에 전달
+        noteManager.SetSpeed(speed);                //스피드를 받아서 노트 매니저에 전달 
     }
 
-    //JSON 데이터에서 시퀀스 데이터 로드
+    //JSON 데이터에서 시퀸스 데이터 로드 
+
     public void LoadSequenceDataFromJson()
     {
         sequenceData.LoadFromJson();
 
-        if(sequenceData.trackNotes == null || sequenceData.trackNotes.Count == 0)
+        if (sequenceData.trackNotes == null || sequenceData.trackNotes.Count == 0)
         {
-            initializeTrackNotes();
+            InitializeTrackNotes();
         }
-
         //매니저에 시퀀스 데이터를 가져와서 맵핑 시킨다.
         noteManager.audioClip = sequenceData.audioClip;
         noteManager.bpm = sequenceData.bpm;
@@ -95,6 +93,7 @@ public class RhythmGameManager : MonoBehaviour
 
         notesGenerated = false;                 //새로운 데이터를 로드 했으므로 노트 재생성 허용
         GenerateNotes();
-        noteManager.Initialized();
+        noteManager.Initialize();
     }
+
 }
