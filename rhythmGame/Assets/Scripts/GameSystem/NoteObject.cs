@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class NoteObject : MonoBehaviour
 {
-    private Note noteData;
+    public Note noteData;
     private float speed;
     private Vector3 startPosition;
     private Vector3 targetPosition;
@@ -36,12 +36,12 @@ public class NoteObject : MonoBehaviour
 
         journeyLength = Vector3.Distance(startPosition, targetPosition);
         startJourneyTime = Time.time;
-        // 비트 타이밍을 고려한 정확한 히트 타임 계산
         exactHitTime = startTime + note.startTime + beatDuration;
 
         isInitialized = true;
         isMissed = false;
     }
+
     void Update()
     {
         if (!isInitialized) return;
@@ -63,7 +63,7 @@ public class NoteObject : MonoBehaviour
             {
                 isMissed = true;
                 OnNoteMissed();
-                // Miss 판정 후 일정 거리 이상 지나면 풀로 반환
+
                 if (overDistance > 2.0f)
                 {
                     ReturnToPool();
@@ -83,15 +83,15 @@ public class NoteObject : MonoBehaviour
         {
             renderer.material.color = Color.gray;
         }
-
-        // 여기에 Miss 이벤트 추가
-        //GameManager.Instance?.OnNoteMissed(noteData);
     }
 
     public void Hit()
     {
         // 노트 히트 시 호출
-        ReturnToPool();
+        if (isInitialized)
+        {
+            ReturnToPool();
+        }
     }
 
     private void ReturnToPool()

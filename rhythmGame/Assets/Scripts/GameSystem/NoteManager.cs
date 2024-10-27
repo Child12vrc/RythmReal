@@ -172,6 +172,14 @@ public class NoteManager : MonoBehaviour
 
         // 풀에서 노트 가져오기
         NoteObject noteComponent = notePool.GetNote();
+
+        // null 체크 추가
+        if (noteComponent == null)
+        {
+            Debug.LogWarning("NotePool has no available NoteObject to spawn.");
+            return;
+        }
+
         noteComponent.transform.position = spawnPoints[trackIndex].position;
         noteComponent.transform.rotation = spawnPoints[trackIndex].rotation;
 
