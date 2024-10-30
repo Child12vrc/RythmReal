@@ -13636,7 +13636,7 @@ MonoBehaviour:
   speed: 1
   notePrefabs: {fileID: 7670656101741989554, guid: 11080aacb2f1fcf41bf0ad71e7e5d292, type: 3}
   audioLatency: 0
-  noteSpeed: 20
+  noteSpeed: 40
   debugMode: 0
   initialDelay: 3
   spawnPoints:
