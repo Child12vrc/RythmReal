@@ -1,9 +1,11 @@
+#if UNITY_EDITOR
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using RhythmGame;
+
 public class SimpleSequenceEditor : EditorWindow
 {
     private SequenceData sequenceData;
@@ -70,11 +72,97 @@ public class SimpleSequenceEditor : EditorWindow
             }
         }
 
+        // 이펙트 트랙 초기화
+        if (sequenceData.effectTrack == null)
+        {
+            sequenceData.effectTrack = new List<int>();
+        }
+
+        while (sequenceData.effectTrack.Count < totalBeats)
+        {
+            sequenceData.effectTrack.Add(0);  // 0은 이펙트 없음을 의미
+        }
+
         if (audioSource != null)
         {
             audioSource.clip = sequenceData.audioClip;
         }
     }
+
+    private void DrawEffectTrack()
+    {
+        EditorGUILayout.BeginVertical();
+        GUILayout.Label("이펙트 트랙", GUILayout.Width(trackWidth));
+
+        for (int j = 0; j < totalBeats; j++)
+        {
+            Rect rect = GUILayoutUtility.GetRect(trackWidth, beatHedight);
+            bool isCurrentBeat = currentBeatTime == j;
+            int effectValue = (sequenceData.effectTrack.Count > j) ? sequenceData.effectTrack[j] : 0;
+
+            // 이펙트 값에 따른 색상 설정
+            Color color = Color.gray;
+            if (isCurrentBeat)
+            {
+                color = Color.cyan;
+            }
+            else if (effectValue > 0)
+            {
+                // 이펙트 값이 있으면 기본 하늘색 배경에 진한 파란색 텍스트
+                color = new Color(0.8f, 0.9f, 1f); // 연한 하늘색
+            }
+
+            // 배경 그리기
+            EditorGUI.DrawRect(rect, color);
+
+            // 이펙트 번호 표시 (0 제외)
+            if (effectValue > 0)
+            {
+                GUIStyle numberStyle = new GUIStyle(EditorStyles.boldLabel);
+                numberStyle.alignment = TextAnchor.MiddleCenter;
+                numberStyle.normal.textColor = new Color(0.2f, 0.2f, 1f); // 진한 파란색
+                EditorGUI.LabelField(rect, effectValue.ToString(), numberStyle);
+            }
+
+            // 마우스 이벤트 처리
+            if (rect.Contains(Event.current.mousePosition))
+            {
+                // 툴팁 표시
+                GUI.tooltip = $"Effect: {effectValue}";
+
+                if (Event.current.type == EventType.MouseDown)
+                {
+                    if (Event.current.button == 0)  // 좌클릭
+                    {
+                        // 다음 이펙트 값으로 순환 (0->1->2->...->10->0)
+                        int nextEffect = (effectValue + 1) % 11;  // 0부터 10까지
+
+                        while (sequenceData.effectTrack.Count <= j)
+                        {
+                            sequenceData.effectTrack.Add(0);
+                        }
+                        sequenceData.effectTrack[j] = nextEffect;
+
+                        // 값이 변경되었음을 Unity에 알림
+                        EditorUtility.SetDirty(sequenceData);
+                    }
+                    else if (Event.current.button == 1)  // 우클릭
+                    {
+                        if (sequenceData.effectTrack.Count > j)
+                        {
+                            sequenceData.effectTrack[j] = 0;  // 이펙트 제거
+                            EditorUtility.SetDirty(sequenceData);
+                        }
+                    }
+                    Event.current.Use();
+                    Repaint(); // UI 즉시 업데이트
+                }
+            }
+        }
+
+        EditorGUILayout.EndVertical();
+    }
+
 
     private void Update()
     {
@@ -154,14 +242,12 @@ public class SimpleSequenceEditor : EditorWindow
             }
         }
 
-        // 색상 그리기
         EditorGUI.DrawRect(rect, color);
 
-        // 마우스가 색상 영역 위에 있을 때 툴팁 설정
         if (rect.Contains(Event.current.mousePosition))
         {
-            GUI.tooltip = noteValue.ToString();  // enum 값 이름을 툴팁으로 설정
-            Repaint();  // 화면 갱신
+            GUI.tooltip = noteValue.ToString();
+            Repaint();
         }
 
         if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
@@ -246,10 +332,12 @@ public class SimpleSequenceEditor : EditorWindow
         }
         EditorGUILayout.EndVertical();
 
+        // 시퀀서 영역
         GUILayout.Space(10);
         scrollPos = EditorGUILayout.BeginScrollView(scrollPos, GUILayout.Height(position.height - 210));
         EditorGUILayout.BeginHorizontal();
 
+        // 타임라인 표시
         EditorGUILayout.BeginVertical(GUILayout.Width(100));
         GUILayout.Space(beatHedight);
 
@@ -267,6 +355,7 @@ public class SimpleSequenceEditor : EditorWindow
 
         EditorGUILayout.EndVertical();
 
+        // 노트 트랙 표시
         for (int i = 0; i < sequenceData.numberOfTracks; i++)
         {
             EditorGUILayout.BeginVertical();
@@ -278,9 +367,13 @@ public class SimpleSequenceEditor : EditorWindow
             EditorGUILayout.EndVertical();
         }
 
+        // 이펙트 트랙 표시
+        DrawEffectTrack();
+
         EditorGUILayout.EndHorizontal();
         EditorGUILayout.EndScrollView();
 
+        // 툴팁 표시
         if (!string.IsNullOrEmpty(GUI.tooltip))
         {
             Vector2 mousePosition = Event.current.mousePosition;
@@ -291,4 +384,6 @@ public class SimpleSequenceEditor : EditorWindow
             GUI.Label(new Rect(mousePosition.x + 15, mousePosition.y, 200, 20), GUI.tooltip, style);
         }
     }
+
 }
+#endif

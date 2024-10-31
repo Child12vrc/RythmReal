@@ -9,8 +9,6 @@ public class RhythmGameManager : MonoBehaviour
     public float playbackSpeed = 1.0f;                      //재생 속도
     private bool notesGenerated = false;                    //노트 생성 완료 플레그 
 
-
-    // Start is called before the first frame update
     void Start()
     {
         if (sequenceData == null)
@@ -18,22 +16,35 @@ public class RhythmGameManager : MonoBehaviour
             Debug.LogError("시퀀스 데이터 없음");
             return;
         }
-
         sequenceData.LoadFromJson();
-
         if (sequenceData.trackNotes == null || sequenceData.trackNotes.Count == 0)
         {
             InitializeTrackNotes();
         }
+
         //매니저에 시퀀스 데이터를 가져와서 맵핑 시킨다.
         noteManager.audioClip = sequenceData.audioClip;
         noteManager.bpm = sequenceData.bpm;
         noteManager.SetSpeed(playbackSpeed);
-
+        noteManager.SetSequenceData(sequenceData);  // 시퀀스 데이터 전달
         GenerateNotes();
         noteManager.Initialize();
     }
 
+    // 이펙트 트랙 초기화
+    private void InitializeEffectTrack()
+    {
+        sequenceData.effectTrack = new List<int>();
+        // 오디오 길이에 맞춰 이펙트 트랙 초기화
+        if (sequenceData.audioClip != null)
+        {
+            int totalBeats = Mathf.FloorToInt((sequenceData.audioClip.length / 60f) * sequenceData.bpm);
+            for (int i = 0; i < totalBeats; i++)
+            {
+                sequenceData.effectTrack.Add(0);
+            }
+        }
+    }
 
     //트렉 노트 초기화 
     private void InitializeTrackNotes()
@@ -49,9 +60,7 @@ public class RhythmGameManager : MonoBehaviour
     private void GenerateNotes()
     {
         if (notesGenerated) return;                     //이미 노트가 생성되었다면 중복 생성 방지
-
         noteManager.notes.Clear();                      //노트 매니저에 접근하여 노트 초기화
-
         for (int trackIndex = 0; trackIndex < sequenceData.trackNotes.Count; trackIndex++)      //노트 트랙 수
         {
             for (int beatIndex = 0; beatIndex < sequenceData.trackNotes[trackIndex].Count; beatIndex++) //해당 트랙의 노트 
@@ -69,6 +78,21 @@ public class RhythmGameManager : MonoBehaviour
         notesGenerated = true;
     }
 
+    // 현재 비트의 이펙트 번호 가져오기
+    public int GetCurrentEffect()
+    {
+        if (sequenceData?.effectTrack == null) return 0;
+
+        float currentTime = noteManager.GetCurrentSongTime();
+        int currentBeat = Mathf.FloorToInt((currentTime * sequenceData.bpm) / 60f);
+
+        if (currentBeat >= 0 && currentBeat < sequenceData.effectTrack.Count)
+        {
+            return sequenceData.effectTrack[currentBeat];
+        }
+        return 0;
+    }
+
     //재생 속도 설정
     public void SetPlaybackSpeed(float speed)
     {
@@ -77,23 +101,24 @@ public class RhythmGameManager : MonoBehaviour
     }
 
     //JSON 데이터에서 시퀸스 데이터 로드 
-
     public void LoadSequenceDataFromJson()
     {
         sequenceData.LoadFromJson();
-
         if (sequenceData.trackNotes == null || sequenceData.trackNotes.Count == 0)
         {
             InitializeTrackNotes();
         }
+        if (sequenceData.effectTrack == null)
+        {
+            InitializeEffectTrack();
+        }
+
         //매니저에 시퀀스 데이터를 가져와서 맵핑 시킨다.
         noteManager.audioClip = sequenceData.audioClip;
         noteManager.bpm = sequenceData.bpm;
         noteManager.SetSpeed(playbackSpeed);
-
         notesGenerated = false;                 //새로운 데이터를 로드 했으므로 노트 재생성 허용
         GenerateNotes();
         noteManager.Initialize();
     }
-
 }

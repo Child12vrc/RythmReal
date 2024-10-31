@@ -1,85 +1,138 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
-using UnityEditor;
 
-[CreateAssetMenu(fileName = "NewSequence" , menuName = "Sequencer/Sequence")]
+[CreateAssetMenu(fileName = "NewSequence", menuName = "Sequencer/Sequence")]
 public class SequenceData : ScriptableObject
 {
-    public int bpm;                                                     //음악의 BPM
-    public int numberOfTracks;                                         //노트 트랙 수
-    public AudioClip audioClip;                                       //오디오 클립
-    public List<List<int>> trackNotes = new List<List<int>>();        //2차원 데이터 정보를 넣는다.
-    public TextAsset trackJsonFile;                                 //.json 파일 텍스트 에섯
+    public int bpm;
+    public int numberOfTracks;
+    public AudioClip audioClip;
+    public List<List<int>> trackNotes = new List<List<int>>();
+    public List<int> effectTrack = new List<int>();  // 이펙트 트랙 추가
+    public TextAsset trackJsonFile;
 
+    [System.Serializable]
+    private class SerializedData
+    {
+        public int bpm;
+        public int numberOfTracks;
+        public string audioClipPath;
+        public List<List<int>> trackNotes;
+        public List<int> effectTrack;  // 직렬화에 이펙트 트랙 포함
+    }
+
+#if UNITY_EDITOR
     public void SaveToJson()
     {
-        if(trackJsonFile == null)
+        if (trackJsonFile == null)
         {
             Debug.LogError("Track JSON 파일이 없습니다.");
             return;
         }
 
-        var data = JsonConvert.SerializeObject(new
+        var data = new SerializedData
         {
-            bpm,
-            numberOfTracks,
-            audioClipPath = AssetDatabase.GetAssetPath(audioClip),
-            trackNotes
-        }, Formatting.Indented);
+            bpm = this.bpm,
+            numberOfTracks = this.numberOfTracks,
+            audioClipPath = UnityEditor.AssetDatabase.GetAssetPath(audioClip),
+            trackNotes = this.trackNotes,
+            effectTrack = this.effectTrack
+        };
 
-        System.IO.File.WriteAllText(AssetDatabase.GetAssetPath(trackJsonFile), data);
-        AssetDatabase.Refresh();
+        string jsonData = JsonConvert.SerializeObject(data, Formatting.Indented);
+        System.IO.File.WriteAllText(UnityEditor.AssetDatabase.GetAssetPath(trackJsonFile), jsonData);
+        UnityEditor.AssetDatabase.Refresh();
     }
+#endif
 
     public void LoadFromJson()
     {
-        if(trackJsonFile == null)
+        if (trackJsonFile == null)
         {
             Debug.LogError("Track JSON 파일이 없습니다.");
             return;
         }
 
-        var data = JsonConvert.DeserializeAnonymousType(trackJsonFile.text, new
+        try
         {
-            bpm = 0,
-            numberOfTracks = 0,
-            //AudioClipPath = "",
-            trackNotes = new List<List<int>>()
-        });
+            var data = JsonConvert.DeserializeObject<SerializedData>(trackJsonFile.text);
 
-        bpm = data.bpm;
-        numberOfTracks = data.numberOfTracks;
-        //audioClip = AssetDatabase.LoadAssetAtPath<AudioClip>(data.AudioClipPath);
-        trackNotes = data.trackNotes;
+            if (data != null)
+            {
+                bpm = data.bpm;
+                numberOfTracks = data.numberOfTracks;
+                trackNotes = data.trackNotes ?? new List<List<int>>();
+                effectTrack = data.effectTrack ?? new List<int>();
+
+#if UNITY_EDITOR
+                if (!string.IsNullOrEmpty(data.audioClipPath))
+                {
+                    audioClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(data.audioClipPath);
+                }
+#endif
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"JSON 파일을 로드하는 중 오류가 발생했습니다: {e.Message}");
+        }
     }
 }
 
 #if UNITY_EDITOR
-[CustomEditor(typeof(SequenceData))]
-public class SequenceDataEditor : Editor
+[UnityEditor.CustomEditor(typeof(SequenceData))]
+public class SequenceDataEditor : UnityEditor.Editor
 {
     public override void OnInspectorGUI()
     {
         var sequenceData = (SequenceData)target;
-
         DrawDefaultInspector();
 
-        if(sequenceData != null)
+        if (sequenceData != null)
         {
-            EditorGUILayout.LabelField("Track Notes", EditorStyles.boldLabel);
-            for(int i = 0; i < sequenceData.trackNotes.Count; i++)
+            UnityEditor.EditorGUILayout.Space();
+            UnityEditor.EditorGUILayout.LabelField("Track Notes", UnityEditor.EditorStyles.boldLabel);
+
+            if (sequenceData.trackNotes != null)
             {
-                EditorGUILayout.LabelField($"Track {i + 1} : [{string.Join(".", sequenceData.trackNotes[i])}");
+                for (int i = 0; i < sequenceData.trackNotes.Count; i++)
+                {
+                    if (sequenceData.trackNotes[i] != null)
+                    {
+                        UnityEditor.EditorGUILayout.LabelField(
+                            $"Track {i + 1}: [{string.Join(", ", sequenceData.trackNotes[i])}]"
+                        );
+                    }
+                }
+            }
+
+            UnityEditor.EditorGUILayout.Space();
+            UnityEditor.EditorGUILayout.LabelField("Effect Track", UnityEditor.EditorStyles.boldLabel);
+            if (sequenceData.effectTrack != null)
+            {
+                UnityEditor.EditorGUILayout.LabelField(
+                    $"Effects: [{string.Join(", ", sequenceData.effectTrack)}]"
+                );
             }
         }
 
-        if (GUILayout.Button("Load form JSON")) sequenceData.LoadFromJson();
-        if (GUILayout.Button("Save form JSON")) sequenceData.SaveToJson();
+        UnityEditor.EditorGUILayout.Space();
 
-        if(GUI.changed)
+        if (GUILayout.Button("Load from JSON"))
         {
-            EditorUtility.SetDirty(sequenceData);
+            sequenceData.LoadFromJson();
+            UnityEditor.EditorUtility.SetDirty(sequenceData);
+        }
+
+        if (GUILayout.Button("Save to JSON"))
+        {
+            sequenceData.SaveToJson();
+        }
+
+        if (GUI.changed)
+        {
+            UnityEditor.EditorUtility.SetDirty(sequenceData);
         }
     }
 }

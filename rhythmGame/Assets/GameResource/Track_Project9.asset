@@ -15,4 +15,5 @@ MonoBehaviour:
   bpm: 105
   numberOfTracks: 4
   audioClip: {fileID: 8300000, guid: db10b03ad621ac44393e3f9de78bc704, type: 3}
+  effectTrack: 
   trackJsonFile: {fileID: 4900000, guid: 57e6f9b524167c5459eaacbc2c35d262, type: 3}

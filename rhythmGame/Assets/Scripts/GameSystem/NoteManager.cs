@@ -31,6 +31,27 @@ public class NoteManager : MonoBehaviour
     private AudioVisualizer audioVisualizer;
     public GameObject[] visualizerObjects; // Inspector에서 설정할 시각화 오브젝트 배열
 
+    private SequenceData sequenceData;  // 추가: 시퀀스 데이터 참조  
+    private int currentEffectBeat = -1;  // 현재 이펙트 비트 추적용
+    public EffectManager effectManager; // 이펙트 매니저 참조
+
+    private void TriggerEffect(int effectValue)
+    {
+        // 이전 이펙트들을 모두 끔
+        effectManager.ResetEffects();
+
+        // 새로운 이펙트 활성화 (effectValue가 0이 아닌 경우에만)
+        if (effectValue > 0)
+        {
+            effectManager.SetEffect(effectValue, true);
+
+            if (debugMode)
+            {
+                Debug.Log($"Effect {effectValue} activated");
+            }
+        }
+    }
+
     public void Initialize()
     {
         // 노트 풀 초기화
@@ -55,9 +76,7 @@ public class NoteManager : MonoBehaviour
 
         CalculateSpawnOffsets();
 
-
-
-           // 오디오 분석을 위한 설정
+        // 오디오 분석을 위한 설정
         audioSource.playOnAwake = false;
 
         if (debugMode)
@@ -66,10 +85,15 @@ public class NoteManager : MonoBehaviour
         }
 
         StartCoroutine(StartAudioWithDelay());
+
+        currentEffectBeat = -1;
         isInitialized = true;
     }
 
-
+    public void SetSequenceData(SequenceData data)  // 추가: 시퀀스 데이터 설정
+    {
+        sequenceData = data;
+    }
 
 
     private IEnumerator StartAudioWithDelay()
@@ -107,6 +131,9 @@ public class NoteManager : MonoBehaviour
 
         // 현재 곡의 진행 시간 계산 (비트 타이밍 고려)
         songPosition = (Time.time - audioStartTime) + audioLatency;
+
+        // 이펙트 처리 추가
+        UpdateEffects();
 
         // 노트 생성 처리
         for (int i = activeNotes.Count - 1; i >= 0; i--)
@@ -253,5 +280,43 @@ public class NoteManager : MonoBehaviour
     public void AdjustAudioLatency(float latency)
     {
         audioLatency = latency;
+    }
+
+    private void UpdateEffects()
+    {
+        if (sequenceData?.effectTrack == null || effectManager == null)
+        {
+            if (debugMode) Debug.LogWarning("Missing effect dependencies");
+            return;
+        }
+
+        float beatDuration = 60f / bpm;
+        int currentBeat = Mathf.FloorToInt(songPosition / beatDuration);
+
+        // 새로운 비트에 진입했고, 해당 비트에 이펙트가 있는 경우에만 처리
+        if (currentBeat >= 0 && currentBeat < sequenceData.effectTrack.Count &&
+            currentBeat != currentEffectBeat)
+        {
+            currentEffectBeat = currentBeat;
+            int effectValue = sequenceData.effectTrack[currentBeat];
+
+            // 새로운 이펙트가 있을 때만 활성화
+            if (effectValue > 0)
+            {
+                if (debugMode)
+                {
+                    Debug.Log($"Triggering effect {effectValue} at beat {currentBeat}, time: {songPosition:F2}");
+                }
+                effectManager.SetEffect(effectValue, true);
+            }
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (effectManager != null)
+        {
+            effectManager.ResetEffects();
+        }
     }
 }
