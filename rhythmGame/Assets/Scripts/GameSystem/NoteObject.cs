@@ -16,6 +16,7 @@ public class NoteObject : MonoBehaviour
     private NotePool pool;
     private float endTime; // 롱노트의 끝 시간
     private bool isLongNote => noteData.duration > 0; // 롱노트 여부 확인
+    private LineRenderer lineRenderer;
 
     public void Initialize(Note note, float noteSpeed, Transform startPos, Transform targetPos, float gameStartTime, NotePool notePool, float beatDur)
     {
@@ -46,7 +47,7 @@ public class NoteObject : MonoBehaviour
 
         if (isLongNote)
         {
-            SetupLongNoteVisuals();
+            SetupLineRenderer();
         }
     }
 
@@ -57,63 +58,69 @@ public class NoteObject : MonoBehaviour
         float currentTime = Time.time;
         float progress = (currentTime - startJourneyTime) / (exactHitTime - startJourneyTime);
 
-        // 노트의 이동 처리
         if (progress <= 1.0f)
         {
-            transform.position = Vector3.Lerp(startPosition, targetPosition, progress);
+            Vector3 currentPosition = Vector3.Lerp(startPosition, targetPosition, progress);
+            transform.position = currentPosition;
+
+            // 롱노트의 LineRenderer 업데이트
+            if (isLongNote && lineRenderer != null)
+            {
+                lineRenderer.SetPosition(1, currentPosition);
+            }
         }
         else if (isLongNote && currentTime <= endTime)
         {
-            // 롱노트의 지속 시간 동안 위치 유지
             transform.position = targetPosition;
         }
         else
         {
-            float overDistance = (progress - 1.0f) * journeyLength;
-            Vector3 direction = (targetPosition - startPosition).normalized;
-            transform.position = targetPosition + (direction * overDistance);
-
-            if (!isMissed && overDistance > 1.0f)
+            if (!isMissed)
             {
                 isMissed = true;
                 OnNoteMissed();
-
-                if (overDistance > 2.0f)
-                {
-                    ReturnToPool();
-                }
+                ReturnToPool();
             }
         }
-
-        transform.rotation = Quaternion.Euler(90, 0, 0);
     }
 
-    private void SetupLongNoteVisuals()
+    private void SetupLineRenderer()
     {
-        // 시각적으로 롱노트를 설정
-        float longNoteLength = noteData.duration * speed; // 롱노트 길이를 계산
-        Transform visualTransform = transform.Find("Visual"); // 롱노트 비주얼 오브젝트
-        if (visualTransform != null)
+        // 기존 LineRenderer 제거 후 새로 설정
+        if (lineRenderer != null)
         {
-            visualTransform.localScale = new Vector3(visualTransform.localScale.x, visualTransform.localScale.y, longNoteLength);
+            Destroy(lineRenderer);
         }
 
-        // 끝점을 시각적으로 표시
-        Transform endMarker = transform.Find("EndMarker");
-        if (endMarker != null)
-        {
-            endMarker.localPosition = new Vector3(0, 0, longNoteLength);
-        }
+        lineRenderer = gameObject.AddComponent<LineRenderer>();
+        lineRenderer.startWidth = 0.1f;
+        lineRenderer.endWidth = 0.1f;
+        lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        lineRenderer.positionCount = 2;
+        lineRenderer.SetPosition(0, startPosition);
+        lineRenderer.SetPosition(1, startPosition); // 초기화 시 끝점은 시작점
     }
 
     private void OnNoteMissed()
     {
         Debug.Log($"Note Missed! Track: {noteData.trackIndex}");
+    }
 
-        Renderer renderer = GetComponent<Renderer>();
-        if (renderer != null)
+    public void ReturnToPool()
+    {
+        if (pool != null)
         {
-            renderer.material.color = Color.gray;
+            isInitialized = false;
+            pool.ReturnNote(this);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+
+        if (lineRenderer != null)
+        {
+            Destroy(lineRenderer);
         }
     }
 
@@ -125,19 +132,6 @@ public class NoteObject : MonoBehaviour
             {
                 ReturnToPool();
             }
-        }
-    }
-
-    private void ReturnToPool()
-    {
-        if (pool != null)
-        {
-            isInitialized = false;
-            pool.ReturnNote(this);
-        }
-        else
-        {
-            Destroy(gameObject);
         }
     }
 }

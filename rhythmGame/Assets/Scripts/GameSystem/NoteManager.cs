@@ -2,8 +2,6 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 
-
-
 public class NoteManager : MonoBehaviour
 {
     public AudioClip audioClip;
@@ -214,7 +212,7 @@ public class NoteManager : MonoBehaviour
         // 풀에서 노트 가져오기
         NoteObject noteComponent = notePool.GetNote();
 
-        // null 체크 추가
+        // null 체크
         if (noteComponent == null)
         {
             Debug.LogWarning("NotePool has no available NoteObject to spawn.");
@@ -224,7 +222,17 @@ public class NoteManager : MonoBehaviour
         noteComponent.transform.position = spawnPoints[trackIndex].position;
         noteComponent.transform.rotation = spawnPoints[trackIndex].rotation;
 
-        // BPM 정보도 전달
+        // LineRenderer 설정
+        if (note.duration > 0) // 롱노트인지 확인
+        {
+            GameObject lineObject = new GameObject("LongNoteLine");
+            LineRenderer lineRenderer = lineObject.AddComponent<LineRenderer>();
+            lineRenderer.startWidth = 0.1f;
+            lineRenderer.endWidth = 0.1f;
+            lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        }
+
+        // 노트 초기화
         float beatDuration = 60f / bpm;
         noteComponent.Initialize(note, noteSpeed, spawnPoints[trackIndex], hitPoints[trackIndex], audioStartTime, notePool, beatDuration);
     }
