@@ -171,6 +171,7 @@ public class RhythmGameManager : MonoBehaviour
     {
         if (notesGenerated) return;
         noteManager.notes.Clear();
+
         for (int trackIndex = 0; trackIndex < sequenceData.trackNotes.Count; trackIndex++)
         {
             for (int beatIndex = 0; beatIndex < sequenceData.trackNotes[trackIndex].Count; beatIndex++)
@@ -179,9 +180,31 @@ public class RhythmGameManager : MonoBehaviour
                 if (noteValue != 0)
                 {
                     float startTime = beatIndex * 60f / sequenceData.bpm;
-                    float duration = noteValue * 60f / sequenceData.bpm;
-                    Note note = new Note(trackIndex, startTime, duration);
+                    float duration = 0f;
+
+                    // 롱노트 처리
+                    if (noteValue == 2) // 롱노트 시작
+                    {
+                        // 다음 노트(롱노트 끝)까지의 길이 계산
+                        float noteLength = 0;
+                        for (int i = beatIndex + 1; i < sequenceData.trackNotes[trackIndex].Count; i++)
+                        {
+                            noteLength++;
+                            if (sequenceData.trackNotes[trackIndex][i] == 3) // 롱노트 끝 찾기
+                            {
+                                break;
+                            }
+                        }
+                        duration = noteLength * 60f / sequenceData.bpm;
+                    }
+
+                    Note note = new Note(trackIndex, startTime, duration, noteValue);
                     noteManager.AddNote(note);
+
+                    //if (debugMode)
+                    //{
+                    //    Debug.Log($"Generated Note - Track: {trackIndex}, Beat: {beatIndex}, NoteValue: {noteValue}, Duration: {duration}");
+                    //}
                 }
             }
         }

@@ -212,31 +212,63 @@ public class NoteManager : MonoBehaviour
         // 풀에서 노트 가져오기
         NoteObject noteComponent = notePool.GetNote();
 
-        // null 체크
         if (noteComponent == null)
         {
             Debug.LogWarning("NotePool has no available NoteObject to spawn.");
             return;
         }
 
+        // 다음 노트의 위치 찾기
+        Transform nextNotePos = null;
+        if (note.duration > 0)  // 롱노트인 경우
+        {
+            float nextNoteTime = note.startTime + note.duration;
+            // 현재 활성화된 노트들 중에서 다음 노트 찾기
+            foreach (Note activeNote in activeNotes)
+            {
+                if (activeNote.trackIndex == note.trackIndex &&
+                    Mathf.Approximately(activeNote.startTime, nextNoteTime))
+                {
+                    nextNotePos = hitPoints[trackIndex];
+                    break;
+                }
+            }
+        }
+
         noteComponent.transform.position = spawnPoints[trackIndex].position;
         noteComponent.transform.rotation = spawnPoints[trackIndex].rotation;
 
-        // LineRenderer 설정
-        if (note.duration > 0) // 롱노트인지 확인
-        {
-            GameObject lineObject = new GameObject("LongNoteLine");
-            LineRenderer lineRenderer = lineObject.AddComponent<LineRenderer>();
-            lineRenderer.startWidth = 0.1f;
-            lineRenderer.endWidth = 0.1f;
-            lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
-        }
-
-        // 노트 초기화
+        // BPM 정보와 함께 다음 노트 위치 전달
         float beatDuration = 60f / bpm;
-        noteComponent.Initialize(note, noteSpeed, spawnPoints[trackIndex], hitPoints[trackIndex], audioStartTime, notePool, beatDuration);
+        noteComponent.Initialize(note, noteSpeed, spawnPoints[trackIndex], hitPoints[trackIndex], nextNotePos,
+            audioStartTime, notePool, beatDuration);
+
+        if (debugMode)
+        {
+            Debug.Log($"Spawned note - Track: {trackIndex}, StartTime: {note.startTime}, " +
+                     $"Duration: {note.duration}, HasNextNote: {nextNotePos != null}");
+        }
     }
 
+    public void AddNote(Note note)
+    {
+        // duration이 있는 경우 롱노트로 설정
+        if (note.duration > 0 && note.noteValue == 0)
+        {
+            note = new Note(
+                trackIndex: note.trackIndex,
+                startTime: note.startTime,
+                duration: note.duration,
+                noteValue: 2  // 롱노트 시작
+            );
+        }
+        notes.Add(note);
+
+        if (debugMode)
+        {
+            Debug.Log($"Added Note - Track: {note.trackIndex}, StartTime: {note.startTime}, Duration: {note.duration}, NoteValue: {note.noteValue}");
+        }
+    }
 
     private void CreateDebugLines()
     {
@@ -288,10 +320,6 @@ public class NoteManager : MonoBehaviour
         }
     }
 
-    public void AddNote(Note note)
-    {
-        notes.Add(note);
-    }
 
     public void SetSpeed(float newSpeed)
     {
