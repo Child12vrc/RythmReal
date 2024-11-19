@@ -60,12 +60,26 @@ public class NoteManager : MonoBehaviour
         notePool = poolObject.AddComponent<NotePool>();
         notePool.Initialize(notePrefabs);
 
-        // 오디오 시각화 설정
-        audioVisualizer = gameObject.AddComponent<AudioVisualizer>();
-        audioVisualizer.visualizerObjects = visualizerObjects;
+        // 오디오 시각화 설정 - 기존 것이 있으면 유지
+        if (audioVisualizer == null)
+        {
+            audioVisualizer = gameObject.GetComponent<AudioVisualizer>();
+            if (audioVisualizer == null)
+            {
+                audioVisualizer = gameObject.AddComponent<AudioVisualizer>();
+                audioVisualizer.visualizerObjects = visualizerObjects;
+            }
+        }
 
+        // 이전 AudioSource 제거 후 새로 생성
+        AudioSource existingAudioSource = gameObject.GetComponent<AudioSource>();
+        if (existingAudioSource != null)
+        {
+            Destroy(existingAudioSource);
+        }
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.clip = audioClip;
+        audioSource.playOnAwake = false;
 
         startTime = Time.time;
         audioStartTime = startTime + initialDelay;
@@ -75,9 +89,6 @@ public class NoteManager : MonoBehaviour
         activeNotes.Sort((a, b) => a.startTime.CompareTo(b.startTime));
 
         CalculateSpawnOffsets();
-
-        // 오디오 분석을 위한 설정
-        audioSource.playOnAwake = false;
 
         if (debugMode)
         {
@@ -90,6 +101,8 @@ public class NoteManager : MonoBehaviour
         isInitialized = true;
     }
 
+
+
     public void SetSequenceData(SequenceData data)  // 추가: 시퀀스 데이터 설정
     {
         sequenceData = data;
@@ -98,9 +111,16 @@ public class NoteManager : MonoBehaviour
 
     private IEnumerator StartAudioWithDelay()
     {
+        // 이전에 재생 중이던 오디오가 있다면 정지
+        if (audioSource.isPlaying)
+        {
+            audioSource.Stop();
+        }
+
         yield return new WaitForSeconds(initialDelay - audioLatency);
         audioSource.Play();
     }
+
     private void CalculateSpawnOffsets()
     {
         if (spawnPoints == null || hitPoints == null || spawnPoints.Length != hitPoints.Length)
@@ -317,6 +337,12 @@ public class NoteManager : MonoBehaviour
         if (effectManager != null)
         {
             effectManager.ResetEffects();
+        }
+
+        // 오디오 정지
+        if (audioSource != null)
+        {
+            audioSource.Stop();
         }
     }
 }

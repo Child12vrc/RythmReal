@@ -14,48 +14,86 @@ public class AudioVisualizer : MonoBehaviour
     public float sensitivity = 100f;
 
     public GameObject[] visualizerObjects;
-    private int[] objectBandAssignment;  // 각 오브젝트가 어떤 주파수 대역에 반응할지 저장
+    private int[] objectBandAssignment;
 
     private float[] bufferRateDecrease = new float[8];
     private float[] freqBandHighest = new float[8];
 
+    private bool isInitialized = false;
+
     void Start()
     {
+        InitializeVisualizer();
+    }
+
+    public void InitializeVisualizer()
+    {
+        // AudioSource 가져오기
         audioSource = GetComponent<AudioSource>();
 
-        // 각 오브젝트에 랜덤하게 주파수 대역 할당
-        objectBandAssignment = new int[visualizerObjects.Length];
-        for (int i = 0; i < visualizerObjects.Length; i++)
+        if (!isInitialized && visualizerObjects != null && visualizerObjects.Length > 0)
         {
-            objectBandAssignment[i] = Random.Range(0, 8);
-        }
+            // 각 오브젝트에 랜덤하게 주파수 대역 할당
+            objectBandAssignment = new int[visualizerObjects.Length];
+            for (int i = 0; i < visualizerObjects.Length; i++)
+            {
+                objectBandAssignment[i] = Random.Range(0, 8);
 
-        // 초기값 설정
-        for (int i = 0; i < 8; i++)
-        {
-            bufferRateDecrease[i] = 0.005f;
-            freqBandHighest[i] = 1f;
+                // 초기 스케일 설정
+                if (visualizerObjects[i] != null)
+                {
+                    visualizerObjects[i].transform.localScale = new Vector3(
+                        visualizerObjects[i].transform.localScale.x,
+                        startScale,
+                        visualizerObjects[i].transform.localScale.z
+                    );
+                }
+            }
+
+            // 초기값 설정
+            for (int i = 0; i < 8; i++)
+            {
+                bufferRateDecrease[i] = 0.005f;
+                freqBandHighest[i] = 1f;
+                bandBuffer[i] = 0f;
+                bufferDecrease[i] = decreaseSpeed;
+            }
+
+            isInitialized = true;
         }
     }
 
     void Update()
     {
-        if (audioSource == null || !audioSource.isPlaying) return;
+        // AudioSource 유효성 검사 강화
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null) return;
+        }
+
+        if (!audioSource.isPlaying)
+        {
+            ResetVisualizers();
+            return;
+        }
 
         GetSpectrumAudioSource();
         MakeFrequencyBands();
         BandBuffer();
         CreateAudioBands();
+        UpdateVisualizers();
+    }
 
-        // 각 시각화 오브젝트 업데이트
+    private void UpdateVisualizers()
+    {
+        if (visualizerObjects == null) return;
+
         for (int i = 0; i < visualizerObjects.Length; i++)
         {
             if (visualizerObjects[i] != null)
             {
-                // 할당된 주파수 대역 가져오기
                 int bandIndex = objectBandAssignment[i];
-
-                // 현재 스케일 가져오기
                 Vector3 currentScale = visualizerObjects[i].transform.localScale;
 
                 // 새로운 Y 스케일 계산
@@ -70,6 +108,64 @@ public class AudioVisualizer : MonoBehaviour
                     newScaleY,
                     currentScale.z
                 );
+            }
+        }
+    }
+
+    private void ResetVisualizers()
+    {
+        if (visualizerObjects == null) return;
+
+        for (int i = 0; i < visualizerObjects.Length; i++)
+        {
+            if (visualizerObjects[i] != null)
+            {
+                Vector3 currentScale = visualizerObjects[i].transform.localScale;
+                visualizerObjects[i].transform.localScale = new Vector3(
+                    currentScale.x,
+                    startScale,
+                    currentScale.z
+                );
+            }
+        }
+    }
+
+    public void OnAudioSourceChanged()
+    {
+        // AudioSource 다시 가져오기
+        audioSource = GetComponent<AudioSource>();
+
+        // 시각화 초기화
+        if (!isInitialized)
+        {
+            InitializeVisualizer();
+        }
+        else
+        {
+            // 기존 값들 초기화
+            for (int i = 0; i < 8; i++)
+            {
+                freqBand[i] = 0f;
+                bandBuffer[i] = 0f;
+                bufferDecrease[i] = decreaseSpeed;
+                freqBandHighest[i] = 1f;
+                bufferRateDecrease[i] = 0.005f;
+            }
+        }
+
+        // 시각화 오브젝트 초기 상태로
+        if (visualizerObjects != null)
+        {
+            foreach (var obj in visualizerObjects)
+            {
+                if (obj != null)
+                {
+                    obj.transform.localScale = new Vector3(
+                        obj.transform.localScale.x,
+                        startScale,
+                        obj.transform.localScale.z
+                    );
+                }
             }
         }
     }
@@ -139,7 +235,12 @@ public class AudioVisualizer : MonoBehaviour
         }
     }
 
-    // 디버깅용: 각 오브젝트가 어떤 주파수 대역에 할당되었는지 확인
+    void OnDisable()
+    {
+        ResetVisualizers();
+    }
+
+    // 디버깅용
     public void PrintBandAssignments()
     {
         for (int i = 0; i < visualizerObjects.Length; i++)
