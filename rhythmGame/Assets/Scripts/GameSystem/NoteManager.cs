@@ -134,8 +134,7 @@ public class NoteManager : MonoBehaviour
         for (int i = 0; i < spawnPoints.Length; i++)
         {
             float distance = Vector3.Distance(spawnPoints[i].position, hitPoints[i].position);
-            // BPM을 고려한 노트 이동 시간 계산
-            float beatDuration = 60f / bpm;  // 한 비트 당 시간(초)
+            float beatDuration = 60f / (bpm * 4); // 1비트의 시간
             spawnOffsets[i] = distance / noteSpeed;
 
             if (debugMode)
@@ -149,54 +148,49 @@ public class NoteManager : MonoBehaviour
     {
         if (!isInitialized || spawnPoints == null || hitPoints == null || spawnPoints.Length == 0) return;
 
-        // 현재 곡의 진행 시간 계산 (비트 타이밍 고려)
         songPosition = (Time.time - audioStartTime) + audioLatency;
 
-        // 이펙트 처리 추가
-        UpdateEffects();
-
-        // 노트 생성 처리
         for (int i = activeNotes.Count - 1; i >= 0; i--)
         {
             Note note = activeNotes[i];
             int trackIndex = Mathf.Clamp(note.trackIndex, 0, spawnPoints.Length - 1);
-            float spawnOffset = spawnOffsets[trackIndex];
-            float beatDuration = 60f / bpm;  // 한 비트 당 시간(초)
 
-            // 노트 생성 시점 계산 (비트 타이밍 고려)
+            float spawnOffset = spawnOffsets[trackIndex];
             float spawnTime = note.startTime - spawnOffset;
 
-            // songPosition이 0보다 작으면 아직 initialDelay 시간
-            if (songPosition < 0) continue;
+            if (songPosition < spawnTime) continue;
 
             if (songPosition >= spawnTime && songPosition < note.startTime + note.duration)
             {
-                if (debugMode)
-                {
-                    Debug.Log($"Before spawn - Song Pos: {songPosition:F3}, Spawn Time: {spawnTime:F3}, Note Start: {note.startTime:F3}");
-                }
-
+                // 롱노트 생성
                 SpawnNoteObject(note);
                 activeNotes.RemoveAt(i);
+            }
+        }
 
-                if (debugMode)
+        // 입력 처리 (롱노트 유지)
+        HandleInput();
+    }
+
+    private void HandleInput()
+    {
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            if (Input.GetKey(KeyCode.Space)) // 예: 스페이스바로 판정
+            {
+                // 활성화된 롱노트를 누르고 있는지 확인
+                foreach (var activeNote in activeNotes)
                 {
-                    Debug.Log($"Spawned note at {songPosition:F3}, Should hit at {note.startTime:F3}");
+                    if (activeNote.duration > 0) // 롱노트
+                    {
+                        // 누르고 있는 동안 판정
+                        Debug.Log($"Holding Long Note on Track {activeNote.trackIndex}");
+                    }
                 }
             }
-            else if (songPosition >= note.startTime + note.duration)
-            {
-                activeNotes.RemoveAt(i);
-            }
-        }
-
-        if (debugMode && Time.frameCount % 60 == 0)
-        {
-            float beatDuration = 60f / bpm;
-            float currentBeat = songPosition / beatDuration;
-            Debug.Log($"Song Position: {songPosition:F3}, Beat: {currentBeat:F2}, Audio Time: {audioSource.time:F3}");
         }
     }
+
 
     void OnGUI()
     {
@@ -310,24 +304,22 @@ public class NoteManager : MonoBehaviour
             return;
         }
 
-        float beatDuration = 60f / bpm;
+        float beatDuration = 60f / (bpm * 4); // 1비트의 시간
         int currentBeat = Mathf.FloorToInt(songPosition / beatDuration);
 
-        // 새로운 비트에 진입했고, 해당 비트에 이펙트가 있는 경우에만 처리
         if (currentBeat >= 0 && currentBeat < sequenceData.effectTrack.Count &&
             currentBeat != currentEffectBeat)
         {
             currentEffectBeat = currentBeat;
             int effectValue = sequenceData.effectTrack[currentBeat];
 
-            // 새로운 이펙트가 있을 때만 활성화
             if (effectValue > 0)
             {
                 if (debugMode)
                 {
                     Debug.Log($"Triggering effect {effectValue} at beat {currentBeat}, time: {songPosition:F2}");
                 }
-                effectManager.SetEffect(effectValue, true);
+                TriggerEffect(effectValue);
             }
         }
     }
