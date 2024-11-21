@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+
 public class NoteObject : MonoBehaviour
 {
     public Note noteData;
@@ -14,18 +16,20 @@ public class NoteObject : MonoBehaviour
     private float beatDuration;
     private NotePool pool;
     private float endTime;
-    private LineRenderer lineRenderer;
+    private float endNoteTime;
+    private Vector3 endNotePosition;
+    private bool hasEndNote;
+    public GameObject temporaryEndPosObject;
 
-    private bool isLongNote => noteData != null && (noteData.noteValue == 2 || noteData.noteValue == 3);
+    private GameObject longNoteLine;
+    private LineRenderer longNoteLineRenderer;
+    private static List<GameObject> activeLongNoteLines = new List<GameObject>();
+
     private bool isLongNoteStart => noteData != null && noteData.noteValue == 2;
     private bool isLongNoteEnd => noteData != null && noteData.noteValue == 3;
 
-    // 롱노트 끝점 관련 변수들
-    private Vector3 nextNotePosition;
-    private bool hasNextNote;
-    private float distanceToNext;
-
-    public void Initialize(Note note, float noteSpeed, Transform startPos, Transform targetPos, Transform nextNotePos, float gameStartTime, NotePool notePool, float beatDur)
+    public void Initialize(Note note, float noteSpeed, Transform startPos, Transform targetPos,
+        Transform endNotePos, float gameStartTime, NotePool notePool, float beatDur, float endTime = 0f)
     {
         if (startPos == null || targetPos == null)
         {
@@ -38,13 +42,6 @@ public class NoteObject : MonoBehaviour
         beatDuration = beatDur;
         startPosition = startPos.position;
         targetPosition = targetPos.position;
-        hasNextNote = nextNotePos != null;
-        if (hasNextNote)
-        {
-            nextNotePosition = nextNotePos.position;
-            distanceToNext = Vector3.Distance(targetPosition, nextNotePosition);
-        }
-
         startTime = gameStartTime;
         pool = notePool;
         transform.position = startPosition;
@@ -52,21 +49,21 @@ public class NoteObject : MonoBehaviour
         journeyLength = Vector3.Distance(startPosition, targetPosition);
         startJourneyTime = Time.time;
         exactHitTime = startTime + note.startTime + beatDuration;
-        endTime = exactHitTime + note.duration;
+        this.endTime = exactHitTime + note.duration;
+
+        hasEndNote = endNotePos != null;
+        if (hasEndNote)
+        {
+            endNotePosition = endNotePos.position;
+            endNoteTime = endTime;
+        }
+
         isInitialized = true;
         isMissed = false;
 
-        if (isLongNoteStart)
+        if (isLongNoteStart && hasEndNote)
         {
-            SetupLineRenderer();
-        }
-        else
-        {
-            if (lineRenderer != null)
-            {
-                Destroy(lineRenderer);
-                lineRenderer = null;
-            }
+            SetupLongNoteLine();
         }
 
         UpdateVisuals();
@@ -81,19 +78,40 @@ public class NoteObject : MonoBehaviour
             if (isLongNoteStart)
             {
                 material.color = Color.yellow;
-                transform.localScale = new Vector3(0.8f, 0.8f, 0.8f);
             }
             else if (isLongNoteEnd)
             {
                 material.color = Color.red;
-                transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
             }
             else
             {
                 material.color = Color.white;
-                transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
             }
         }
+    }
+
+    private void SetupLongNoteLine()
+    {
+        longNoteLine = new GameObject($"LongNoteLine_Track{noteData.trackIndex}");
+        activeLongNoteLines.Add(longNoteLine);
+
+        longNoteLineRenderer = longNoteLine.AddComponent<LineRenderer>();
+        longNoteLineRenderer.positionCount = 2;
+        longNoteLineRenderer.startWidth = 0.2f;
+        longNoteLineRenderer.endWidth = 0.2f;
+
+        Material lineMaterial = new Material(Shader.Find("Sprites/Default"))
+        {
+            renderQueue = 3000
+        };
+        longNoteLineRenderer.material = lineMaterial;
+
+        float alpha = 0.8f;
+        longNoteLineRenderer.startColor = new Color(1f, 1f, 0f, alpha);
+        longNoteLineRenderer.endColor = new Color(1f, 0f, 0f, alpha);
+
+        longNoteLineRenderer.SetPosition(0, transform.position);
+        longNoteLineRenderer.SetPosition(1, endNotePosition);
     }
 
     void Update()
@@ -108,76 +126,24 @@ public class NoteObject : MonoBehaviour
             Vector3 currentPosition = Vector3.Lerp(startPosition, targetPosition, progress);
             transform.position = currentPosition;
 
-            if (isLongNoteStart && lineRenderer != null)
+            if (isLongNoteStart && longNoteLineRenderer != null && hasEndNote)
             {
-                UpdateLongNoteLine(currentPosition, progress);
+                float endProgress = (Time.time - startJourneyTime) / (endNoteTime - startTime);
+                endProgress = Mathf.Clamp01(endProgress);
+                Vector3 endPos = Vector3.Lerp(startPosition, endNotePosition, endProgress);
+
+                longNoteLineRenderer.SetPosition(0, currentPosition);
+                longNoteLineRenderer.SetPosition(1, endPos);
             }
         }
-        else if (isLongNoteStart && currentTime <= endTime)
+        else if (!isMissed)
         {
-            transform.position = targetPosition;
-            if (lineRenderer != null && hasNextNote)
-            {
-                lineRenderer.SetPosition(0, targetPosition);
-                lineRenderer.SetPosition(1, nextNotePosition);
-            }
-        }
-        else
-        {
-            if (!isMissed)
-            {
-                isMissed = true;
-                OnNoteMissed();
-                ReturnToPool();
-            }
+            isMissed = true;
+            OnNoteMissed();
+            ReturnToPool();
         }
     }
 
-    private void UpdateLongNoteLine(Vector3 currentPosition, float progress)
-    {
-        if (lineRenderer != null && hasNextNote)
-        {
-            lineRenderer.SetPosition(0, currentPosition);
-
-            // 다음 노트 위치까지의 보간
-            Vector3 endPos = hasNextNote ? nextNotePosition : targetPosition;
-            lineRenderer.SetPosition(1, endPos);
-
-            // 라인 색상 그라데이션
-            float alpha = 0.8f;
-            Color startColor = new Color(1f, 1f, 0f, alpha); // 노란색
-            Color endColor = new Color(1f, 0f, 0f, alpha);   // 빨간색
-            lineRenderer.startColor = startColor;
-            lineRenderer.endColor = endColor;
-        }
-    }
-
-    private void SetupLineRenderer()
-    {
-        if (lineRenderer != null)
-        {
-            Destroy(lineRenderer);
-        }
-
-        lineRenderer = gameObject.AddComponent<LineRenderer>();
-        lineRenderer.positionCount = 2;
-        lineRenderer.startWidth = 0.2f;
-        lineRenderer.endWidth = 0.2f;
-
-        Material lineMaterial = new Material(Shader.Find("Sprites/Default"))
-        {
-            renderQueue = 3000
-        };
-        lineRenderer.material = lineMaterial;
-
-        Vector3 endPos = hasNextNote ? nextNotePosition : targetPosition;
-        lineRenderer.SetPosition(0, startPosition);
-        lineRenderer.SetPosition(1, endPos);
-
-        float alpha = 0.8f;
-        lineRenderer.startColor = new Color(1f, 1f, 0f, alpha);
-        lineRenderer.endColor = new Color(1f, 0f, 0f, alpha);
-    }
     private void OnNoteMissed()
     {
         Debug.Log($"Note Missed! Track: {noteData.trackIndex}");
@@ -188,18 +154,43 @@ public class NoteObject : MonoBehaviour
         if (pool != null)
         {
             isInitialized = false;
-            if (lineRenderer != null)
+
+            if (temporaryEndPosObject != null)
             {
-                Destroy(lineRenderer);
-                lineRenderer = null;
+                Destroy(temporaryEndPosObject);
+                temporaryEndPosObject = null;
             }
+
+            if (isLongNoteEnd)
+            {
+                GameObject lineToRemove = null;
+                foreach (var line in activeLongNoteLines)
+                {
+                    if (line != null && line.name == $"LongNoteLine_Track{noteData.trackIndex}")
+                    {
+                        lineToRemove = line;
+                        break;
+                    }
+                }
+
+                if (lineToRemove != null)
+                {
+                    activeLongNoteLines.Remove(lineToRemove);
+                    Destroy(lineToRemove);
+                }
+            }
+
             pool.ReturnNote(this);
         }
         else
         {
-            if (lineRenderer != null)
+            if (temporaryEndPosObject != null)
             {
-                Destroy(lineRenderer);
+                Destroy(temporaryEndPosObject);
+            }
+            if (longNoteLine != null)
+            {
+                Destroy(longNoteLine);
             }
             Destroy(gameObject);
         }
@@ -209,18 +200,19 @@ public class NoteObject : MonoBehaviour
     {
         if (isInitialized)
         {
-            if (!isLongNoteHold || Time.time >= endTime)
-            {
-                ReturnToPool();
-            }
+            ReturnToPool();
         }
     }
 
     private void OnDestroy()
     {
-        if (lineRenderer != null)
+        if (temporaryEndPosObject != null)
         {
-            Destroy(lineRenderer);
+            Destroy(temporaryEndPosObject);
+        }
+        if (longNoteLine != null)
+        {
+            Destroy(longNoteLine);
         }
     }
 }

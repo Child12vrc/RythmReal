@@ -205,49 +205,67 @@ public class NoteManager : MonoBehaviour
         }
     }
 
-    private void SpawnNoteObject(Note note)
+    private NoteObject SpawnNoteObject(Note note)
     {
         int trackIndex = Mathf.Clamp(note.trackIndex, 0, spawnPoints.Length - 1);
-
-        // 풀에서 노트 가져오기
         NoteObject noteComponent = notePool.GetNote();
 
         if (noteComponent == null)
         {
             Debug.LogWarning("NotePool has no available NoteObject to spawn.");
-            return;
+            return null;
         }
 
-        // 다음 노트의 위치 찾기
-        Transform nextNotePos = null;
-        if (note.duration > 0)  // 롱노트인 경우
+        Transform endNotePos = null;
+        float endNoteTime = 0f;
+        if (note.noteValue == 2)  // 롱노트 시작
         {
-            float nextNoteTime = note.startTime + note.duration;
-            // 현재 활성화된 노트들 중에서 다음 노트 찾기
-            foreach (Note activeNote in activeNotes)
+            float minTimeDiff = float.MaxValue;
+            Note endNote = null;
+            foreach (Note otherNote in notes)
             {
-                if (activeNote.trackIndex == note.trackIndex &&
-                    Mathf.Approximately(activeNote.startTime, nextNoteTime))
+                if (otherNote.trackIndex == note.trackIndex &&
+                    otherNote.noteValue == 3 &&
+                    otherNote.startTime > note.startTime)
                 {
-                    nextNotePos = hitPoints[trackIndex];
-                    break;
+                    float timeDiff = otherNote.startTime - note.startTime;
+                    if (timeDiff < minTimeDiff)
+                    {
+                        minTimeDiff = timeDiff;
+                        endNoteTime = otherNote.startTime;
+                        endNote = otherNote;
+                    }
                 }
             }
+
+            if (endNote != null)
+            {
+                // 끝노트의 위치를 계산
+                GameObject tempEndPos = new GameObject("TempEndPos");
+                float spawnOffset = spawnOffsets[trackIndex];
+                float endSpawnTime = endNote.startTime;
+                float moveDistance = noteSpeed * (endSpawnTime - note.startTime);
+                Vector3 direction = (hitPoints[trackIndex].position - spawnPoints[trackIndex].position).normalized;
+                tempEndPos.transform.position = spawnPoints[trackIndex].position + direction * moveDistance;
+                endNotePos = tempEndPos.transform;
+                noteComponent.temporaryEndPosObject = tempEndPos;
+            }
+        }
+
+        if (endNoteTime > 0)
+        {
+            note.duration = endNoteTime - note.startTime;
         }
 
         noteComponent.transform.position = spawnPoints[trackIndex].position;
         noteComponent.transform.rotation = spawnPoints[trackIndex].rotation;
 
-        // BPM 정보와 함께 다음 노트 위치 전달
         float beatDuration = 60f / bpm;
-        noteComponent.Initialize(note, noteSpeed, spawnPoints[trackIndex], hitPoints[trackIndex], nextNotePos,
-            audioStartTime, notePool, beatDuration);
+        noteComponent.Initialize(note, noteSpeed, spawnPoints[trackIndex],
+            hitPoints[trackIndex], endNotePos, audioStartTime, notePool,
+            beatDuration, endNoteTime);
 
-        if (debugMode)
-        {
-            Debug.Log($"Spawned note - Track: {trackIndex}, StartTime: {note.startTime}, " +
-                     $"Duration: {note.duration}, HasNextNote: {nextNotePos != null}");
-        }
+        return noteComponent;
     }
 
     public void AddNote(Note note)
