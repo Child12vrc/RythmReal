@@ -4,12 +4,30 @@ using System.Collections;
 
 public class RhythmGameController : MonoBehaviour
 {
+    public enum GameState
+    {
+        Menu,
+        Ready,
+        Playing,
+        Paused,
+        GameOver
+    }
+
     [Header("Game Management")]
     public RhythmGameManager gameManager;
+    public JudgeManager judgeManager;
+    public KeyCode startKey = KeyCode.Return;  // Enter 키로 시작
     public KeyCode nextTrackKey = KeyCode.RightArrow;
     public KeyCode previousTrackKey = KeyCode.LeftArrow;
     public KeyCode restartKey = KeyCode.R;
     public KeyCode pauseKey = KeyCode.Escape;
+
+    [Header("Game State")]
+    private bool isGameStarted = false;
+    private bool isPaused = false;
+    private bool isGameActive = false;
+    private GameState currentGameState = GameState.Menu;
+
 
     [Header("Score UI")]
     public Text scoreText;
@@ -33,29 +51,80 @@ public class RhythmGameController : MonoBehaviour
     private int goodHits = 0;
     private int misses = 0;
 
-    private bool isPaused = false;
-    private bool isGameActive = false;
-
     void Start()
     {
         ResetScore();
         isGameActive = true;
+
+        // 게임 시작 전에는 매니저들 비활성화
+        if (gameManager != null) gameManager.enabled = false;
+        if (judgeManager != null) judgeManager.enabled = false;
+        SetGameState(GameState.Menu);
+    }
+
+    public void StartGame(int trackIndex = 0)
+    {
+        StartCoroutine(GameStartSequence(trackIndex));
+    }
+
+    private IEnumerator GameStartSequence(int trackIndex)
+    {
+        SetGameState(GameState.Ready);
+        ResetScore();
+
+        // 게임 매니저들 활성화
+        if (gameManager != null)
+        {
+            gameManager.enabled = true;
+            gameManager.ChangeTrack(trackIndex);
+        }
+        if (judgeManager != null) judgeManager.enabled = true;
+
+        // 여기에 게임 시작 연출을 위한 대기 시간 추가 가능
+        yield return new WaitForSeconds(1f); // 연출을 위한 대기 시간
+
+        // 게임 시작
+        isGameStarted = true;
+        isGameActive = true;
+        SetGameState(GameState.Playing);
+        gameManager.Initialize(); // 이제 초기화하면 음악과 노트가 시작됨
     }
 
     void Update()
     {
-        if (!isGameActive) return;
+        switch (currentGameState)
+        {
+            case GameState.Menu:
+                if (Input.GetKeyDown(startKey))
+                {
+                    StartGame(gameManager.GetCurrentTrackIndex());
+                }
+                if (Input.GetKeyDown(nextTrackKey))
+                {
+                    gameManager.NextTrack();
+                }
+                else if (Input.GetKeyDown(previousTrackKey))
+                {
+                    gameManager.PreviousTrack();
+                }
+                break;
 
-        // 게임 컨트롤 입력 처리
-        HandleGameControls();
+            case GameState.Playing:
+                HandleGameControls();
+                // HandleNoteInput 제거 - JudgeManager가 직접 처리
+                break;
 
-        // 노트 입력 처리 (예시 - 실제 구현은 노트 판정 시스템과 연동 필요)
-        HandleNoteInput();
+            case GameState.Paused:
+                if (Input.GetKeyDown(pauseKey))
+                {
+                    ResumeGame();
+                }
+                break;
+        }
     }
 
     private void HandleGameControls()
     {
-        // 일시정지
         if (Input.GetKeyDown(pauseKey))
         {
             TogglePause();
@@ -63,7 +132,6 @@ public class RhythmGameController : MonoBehaviour
 
         if (isPaused) return;
 
-        // 트랙 전환
         if (Input.GetKeyDown(nextTrackKey))
         {
             StartNewTrack(() => gameManager.NextTrack());
@@ -73,38 +141,29 @@ public class RhythmGameController : MonoBehaviour
             StartNewTrack(() => gameManager.PreviousTrack());
         }
 
-        // 재시작
         if (Input.GetKeyDown(restartKey))
         {
             RestartCurrentTrack();
         }
     }
 
-    private void HandleNoteInput()
+    // JudgeManager의 판정 결과를 받아서 점수 처리
+    public void OnJudgeResult(string result, float timing)
     {
-        // 여기에 실제 노트 판정 로직 구현
-        // 예시: 각 트랙에 해당하는 키 입력 처리
-        // if (Input.GetKeyDown(KeyCode.D)) CheckNoteHit(0);
-        // if (Input.GetKeyDown(KeyCode.F)) CheckNoteHit(1);
-        // 등등...
-    }
-
-    // 노트 판정 처리 (NoteManager와 연동 필요)
-    public void OnNoteHit(float timing)
-    {
-        if (Mathf.Abs(timing) <= perfectTiming)
+        switch (result)
         {
-            AddScore(perfectScore, "Perfect");
-            perfectHits++;
-        }
-        else if (Mathf.Abs(timing) <= goodTiming)
-        {
-            AddScore(goodScore, "Good");
-            goodHits++;
-        }
-        else
-        {
-            OnNoteMiss();
+            case "Perfect":
+                AddScore(perfectScore, "Perfect");
+                perfectHits++;
+                break;
+            case "Good":
+                AddScore(goodScore, "Good");
+                goodHits++;
+                break;
+            case "Bad":
+            case "Miss":
+                OnNoteMiss();
+                break;
         }
         hitNotes++;
         UpdateAccuracy();
@@ -229,6 +288,93 @@ public class RhythmGameController : MonoBehaviour
     void OnDisable()
     {
         SaveCurrentScore();
+    }
+
+    private void SetGameState(GameState newState)
+    {
+        currentGameState = newState;
+        switch (newState)
+        {
+            case GameState.Menu:
+                Time.timeScale = 1;
+                isGameActive = false;
+                break;
+
+            case GameState.Ready:
+                Time.timeScale = 1;
+                isGameActive = false;
+                break;
+
+            case GameState.Playing:
+                Time.timeScale = 1;
+                isGameActive = true;
+                break;
+
+            case GameState.Paused:
+                Time.timeScale = 0;
+                break;
+
+            case GameState.GameOver:
+                Time.timeScale = 1;
+                isGameActive = false;
+                break;
+        }
+    }
+
+    public void PauseGame()
+    {
+        if (currentGameState == GameState.Playing)
+        {
+            SetGameState(GameState.Paused);
+            isPaused = true;
+            gameManager.PauseGame();
+        }
+    }
+
+    public void ResumeGame()
+    {
+        if (currentGameState == GameState.Paused)
+        {
+            SetGameState(GameState.Playing);
+            isPaused = false;
+            gameManager.ResumeGame();
+        }
+    }
+
+    public void ReturnToMenu()
+    {
+        StopAllCoroutines();
+        if (gameManager != null)
+        {
+            gameManager.enabled = false;
+        }
+        if (judgeManager != null)
+        {
+            judgeManager.enabled = false;
+        }
+        SaveCurrentScore();
+        SetGameState(GameState.Menu);
+        isGameStarted = false;
+    }
+
+    public void OnNoteHit(float timing)
+    {
+        if (Mathf.Abs(timing) <= perfectTiming)
+        {
+            AddScore(perfectScore, "Perfect");
+            perfectHits++;
+        }
+        else if (Mathf.Abs(timing) <= goodTiming)
+        {
+            AddScore(goodScore, "Good");
+            goodHits++;
+        }
+        else
+        {
+            OnNoteMiss();
+        }
+        hitNotes++;
+        UpdateAccuracy();
     }
 
     // 외부에서 접근 가능한 현재 게임 상태 정보
