@@ -347,8 +347,21 @@ public class SimpleSequenceEditor : EditorWindow
             int minutes = Mathf.FloorToInt(beatTime / 60f);
             int seconds = Mathf.FloorToInt(beatTime % 60f);
             EditorGUILayout.BeginHorizontal();
+
+            // 4박자마다 다른 색상으로 표시
+            if (j % 4 == 0)
+            {
+                GUI.color = Color.yellow;  // 정박 표시
+            }
+            else
+            {
+                GUI.color = Color.white;   // 일반 박자
+            }
+
             EditorGUILayout.LabelField($"{minutes:00}:{seconds:00}", GUILayout.Width(50));
             EditorGUILayout.LabelField($"{j}", GUILayout.Width(30));
+            GUI.color = Color.white;  // 색상 초기화
+
             EditorGUILayout.EndHorizontal();
             GUILayout.Space(beatHedight - EditorGUIUtility.singleLineHeight);
         }
