@@ -223,18 +223,18 @@ namespace RhythmGame
         {
             if (!isTransitioning)
             {
-                if (Input.GetKeyDown(KeyCode.LeftArrow))
-                {
-                    SelectPreviousLevel();
-                }
-                else if (Input.GetKeyDown(KeyCode.RightArrow))
-                {
-                    SelectNextLevel();
-                }
-                else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
-                {
-                    StartSelectedLevel();
-                }
+                //if (Input.GetKeyDown(KeyCode.LeftArrow))
+                //{
+                //    SelectPreviousLevel();
+                //}
+                //else if (Input.GetKeyDown(KeyCode.RightArrow))
+                //{
+                //    SelectNextLevel();
+                //}
+                //else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
+                //{
+                //    StartSelectedLevel();
+                //}
             }
         }
 

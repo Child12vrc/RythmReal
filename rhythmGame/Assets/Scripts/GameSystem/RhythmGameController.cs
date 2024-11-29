@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
+using TMPro;
 
 public class RhythmGameController : MonoBehaviour
 {
@@ -51,6 +52,9 @@ public class RhythmGameController : MonoBehaviour
     private int goodHits = 0;
     private int misses = 0;
 
+    [Header("Guide UI")]
+    public TextMeshProUGUI pressToStartText;  // TextMeshPro로 변경
+
     void Start()
     {
         ResetScore();
@@ -60,11 +64,29 @@ public class RhythmGameController : MonoBehaviour
         if (gameManager != null) gameManager.enabled = false;
         if (judgeManager != null) judgeManager.enabled = false;
         SetGameState(GameState.Menu);
+        ShowPressToStart(true);  // 시작 시 안내 텍스트 표시
+    }
+
+    private void ShowPressToStart(bool show)
+    {
+        if (pressToStartText != null)
+        {
+            pressToStartText.text = "Press Enter to Start";
+            pressToStartText.gameObject.SetActive(show);
+        }
     }
 
     public void StartGame(int trackIndex = 0)
     {
         StartCoroutine(GameStartSequence(trackIndex));
+        ShowPressToStart(false);  // 게임 시작 시 안내 텍스트 숨김
+    }
+
+    // 게임 완료 시 호출될 메서드
+    public void OnSongComplete()
+    {
+        ReturnToMenu();
+        ShowPressToStart(true);  // 메뉴로 돌아갈 때 안내 텍스트 다시 표시
     }
 
     private IEnumerator GameStartSequence(int trackIndex)

@@ -6,6 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/GameSceneCWH.unity
-    guid: 3efa7d7b195fecd4bab99d7e3a7e7aa8
+    path: Assets/Scenes/GameSceneCWH_CubeMap.unity
+    guid: 3631a6b8ee4339541bc00a98369be1d5
   m_configObjects: {}

@@ -3,7 +3,10 @@ guid: e4dede7ba0653f1448388c3f834f71bc
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - audioClip: {instanceID: 0}
+  - albumArt: {instanceID: 0}
+  - trackJsonFile: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 

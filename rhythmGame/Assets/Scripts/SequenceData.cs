@@ -1,15 +1,15 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
-
 [CreateAssetMenu(fileName = "NewSequence", menuName = "Sequencer/Sequence")]
 public class SequenceData : ScriptableObject
 {
     public int bpm;
     public int numberOfTracks;
     public AudioClip audioClip;
+    public Texture2D albumArt;  // 앨범 아트 추가
     public List<List<int>> trackNotes = new List<List<int>>();
-    public List<int> effectTrack = new List<int>();  // 이펙트 트랙 추가
+    public List<int> effectTrack = new List<int>();
     public TextAsset trackJsonFile;
 
     [System.Serializable]
@@ -18,8 +18,9 @@ public class SequenceData : ScriptableObject
         public int bpm;
         public int numberOfTracks;
         public string audioClipPath;
+        public string albumArtPath;  // 앨범 아트 경로 추가
         public List<List<int>> trackNotes;
-        public List<int> effectTrack;  // 직렬화에 이펙트 트랙 포함
+        public List<int> effectTrack;
     }
 
 #if UNITY_EDITOR
@@ -36,6 +37,7 @@ public class SequenceData : ScriptableObject
             bpm = this.bpm,
             numberOfTracks = this.numberOfTracks,
             audioClipPath = UnityEditor.AssetDatabase.GetAssetPath(audioClip),
+            albumArtPath = UnityEditor.AssetDatabase.GetAssetPath(albumArt),  // 앨범 아트 경로 저장
             trackNotes = this.trackNotes,
             effectTrack = this.effectTrack
         };
@@ -70,6 +72,10 @@ public class SequenceData : ScriptableObject
                 {
                     audioClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(data.audioClipPath);
                 }
+                if (!string.IsNullOrEmpty(data.albumArtPath))  // 앨범 아트 로드
+                {
+                    albumArt = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(data.albumArtPath);
+                }
 #endif
             }
         }
@@ -92,6 +98,15 @@ public class SequenceDataEditor : UnityEditor.Editor
         if (sequenceData != null)
         {
             UnityEditor.EditorGUILayout.Space();
+
+            // 앨범 아트 프리뷰 추가
+            if (sequenceData.albumArt != null)
+            {
+                float previewSize = 100f;
+                Rect previewRect = UnityEditor.EditorGUILayout.GetControlRect(false, previewSize);
+                UnityEditor.EditorGUI.DrawPreviewTexture(previewRect, sequenceData.albumArt);
+            }
+
             UnityEditor.EditorGUILayout.LabelField("Track Notes", UnityEditor.EditorStyles.boldLabel);
 
             if (sequenceData.trackNotes != null)

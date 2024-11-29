@@ -16,6 +16,8 @@ public class RhythmGameManager : MonoBehaviour
     public List<SequenceData> availableTracks;
     private int currentTrackIndex = 0;
 
+    private RhythmGameController gameController;
+
     void Start()
     {
         gameAudioSource = GetComponent<AudioSource>();
@@ -23,6 +25,8 @@ public class RhythmGameManager : MonoBehaviour
         {
             gameAudioSource = gameObject.AddComponent<AudioSource>();
         }
+
+        gameController = GetComponent<RhythmGameController>();
     }
 
     public void Initialize()
@@ -55,6 +59,21 @@ public class RhythmGameManager : MonoBehaviour
 
         SetupTrack();
     }
+
+    void Update()
+    {
+        if (isPlaying && !gameAudioSource.isPlaying && gameAudioSource.time > 0)
+        {
+            // ¿Ωæ«¿Ã ≥°≥µ¿ª ∂ß
+            isPlaying = false;
+            if (gameController != null)
+            {
+                gameController.OnSongComplete();
+            }
+            EndGame();
+        }
+    }
+
 
     private void SetupTrack()
     {
