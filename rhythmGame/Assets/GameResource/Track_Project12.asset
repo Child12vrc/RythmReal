@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: Track_Project12
   m_EditorClassIdentifier: 
   bpm: 130
-  numberOfTracks: 4
+  numberOfTracks: 1
+  trackName: 4 Track
   audioClip: {fileID: 8300000, guid: 4ab7153a0b9577743aa462e1cbcecee5, type: 3}
+  albumArt: {fileID: 0}
+  effectTrack: 
   trackJsonFile: {fileID: 4900000, guid: 5582f6147945da84594a212a97ca0534, type: 3}

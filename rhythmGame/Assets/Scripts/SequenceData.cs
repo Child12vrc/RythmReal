@@ -6,6 +6,7 @@ public class SequenceData : ScriptableObject
 {
     public int bpm;
     public int numberOfTracks;
+    public string trackName;
     public AudioClip audioClip;
     public Texture2D albumArt;  // 앨범 아트 추가
     public List<List<int>> trackNotes = new List<List<int>>();
