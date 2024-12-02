@@ -131,6 +131,18 @@ public class JudgeManager : MonoBehaviour
         }
     }
 
+    // JudgeManager.cs에 추가할 함수
+    public void ClearAllNotes()
+    {
+        StopAllCoroutines();
+
+        // 판정 관련 상태 초기화
+        // 활성화된 모든 노트 오브젝트 제거
+        foreach (Transform child in transform)
+        {
+            Destroy(child.gameObject);
+        }
+    }
     void JudgeNote(int trackIndex)
     {
         if (noteManager == null || noteManager.hitPoints == null ||

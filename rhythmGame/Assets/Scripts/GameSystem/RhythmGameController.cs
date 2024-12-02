@@ -55,6 +55,9 @@ public class RhythmGameController : MonoBehaviour
     [Header("Guide UI")]
     public TextMeshProUGUI pressToStartText;  // TextMeshPro로 변경
 
+    public CameraPositionController cameraPositionController;
+    public MenuScroll menuScroll;
+
     void Start()
     {
         ResetScore();
@@ -121,14 +124,7 @@ public class RhythmGameController : MonoBehaviour
                 {
                     StartGame(gameManager.GetCurrentTrackIndex());
                 }
-                if (Input.GetKeyDown(nextTrackKey))
-                {
-                    gameManager.NextTrack();
-                }
-                else if (Input.GetKeyDown(previousTrackKey))
-                {
-                    gameManager.PreviousTrack();
-                }
+  
                 break;
 
             case GameState.Playing:
@@ -147,9 +143,14 @@ public class RhythmGameController : MonoBehaviour
 
     private void HandleGameControls()
     {
-        if (Input.GetKeyDown(pauseKey))
+        if (Input.GetKeyDown(pauseKey))  // ESC 키
         {
-            TogglePause();
+            // 음악 멈추고 메뉴로 복귀
+            // 게임 종료 처리
+            gameManager.EndGame();  // 게임 매니저의 EndGame 호출
+            ReturnToMenu();
+            menuScroll.ReturnToMenu();
+            cameraPositionController.MoveCameraToPosition(1);
         }
 
         if (isPaused) return;
@@ -366,17 +367,30 @@ public class RhythmGameController : MonoBehaviour
     public void ReturnToMenu()
     {
         StopAllCoroutines();
+
+        // 게임 매니저 정리
         if (gameManager != null)
         {
+            gameManager.EndGame();
             gameManager.enabled = false;
         }
+
+        // 저지 매니저 정리
         if (judgeManager != null)
         {
+            judgeManager.ClearAllNotes();  // 노트 매니저 클리어 함수 필요
             judgeManager.enabled = false;
         }
+
+        // 게임 상태 초기화
         SaveCurrentScore();
         SetGameState(GameState.Menu);
         isGameStarted = false;
+        isGameActive = false;
+        isPaused = false;
+
+        // 시간 스케일 리셋
+        Time.timeScale = 1;
     }
 
     public void OnNoteHit(float timing)

@@ -134,6 +134,18 @@ public class NoteManager : MonoBehaviour
         }
     }
 
+    // NoteManager.cs에 추가할 함수
+    public void ClearAll()
+    {
+        notes.Clear();
+        StopAllCoroutines();
+
+        // 활성화된 모든 노트 오브젝트 제거
+        foreach (Transform child in transform)
+        {
+            Destroy(child.gameObject);
+        }
+    }
     void Update()
     {
         if (!isInitialized || spawnPoints == null || hitPoints == null || spawnPoints.Length == 0) return;

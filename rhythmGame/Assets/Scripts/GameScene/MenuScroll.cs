@@ -8,38 +8,146 @@ public class MenuScroll : MonoBehaviour
     [Header("참조")]
     [SerializeField] private GameObject itemPrefab;
     [SerializeField] private RhythmGameManager gameManager;
+    [SerializeField] private RhythmGameController gameController;
+    [SerializeField] private Material albumMaterial;
     public GameObject[] menuItems;
     public Transform uiPivot;
     public float verticalSpacing = 2.0f;
     public List<Vector3> menuPos = new List<Vector3>();
 
     [Header("이동 설정")]
-    [SerializeField] private float moveTime = 0.2f;        // 이동 시간
-    [SerializeField] private Ease moveEase = Ease.OutQuad; // 이동 애니메이션 커브
+    [SerializeField] private float moveTime = 0.2f;
+    [SerializeField] private float zOffset = 2.0f;
+    [SerializeField] private Ease moveEase = Ease.OutQuad;
 
     private bool isMoving = false;
+    private bool isSetup = false;
     public int currentTopIndex = 0;
+    private Vector3 originalPosition;
+    private AudioSource previewAudioSource;
+    public CameraPositionController cameraPositionController;
 
     private void Start()
     {
         InitializeMenuItems();
+        previewAudioSource = gameObject.AddComponent<AudioSource>();
+        previewAudioSource.playOnAwake = false;
     }
 
     private void Update()
     {
         if (!isMoving)
         {
-            if (Input.GetKeyDown(KeyCode.UpArrow))
+            if (Input.GetKeyDown(KeyCode.LeftArrow))
             {
-                ScrollUp();
+                SetupMenu();
             }
-            else if (Input.GetKeyDown(KeyCode.DownArrow))
+            else if (Input.GetKeyDown(KeyCode.RightArrow) && isSetup)
             {
-                ScrollDown();
+                ReturnToOriginalPosition();
+                StopPreview();
+            }
+            else if (Input.GetKeyDown(KeyCode.Return) && isSetup)
+            {
+                StartGame();
+            }
+            else if (!isSetup)
+            {
+                if (Input.GetKeyDown(KeyCode.UpArrow))
+                {
+                    ScrollUp();
+                }
+                else if (Input.GetKeyDown(KeyCode.DownArrow))
+                {
+                    ScrollDown();
+                }
             }
         }
     }
 
+    private void StartGame()
+    {
+        StopPreview();
+        cameraPositionController.MoveCameraToPosition(2);
+        gameController.StartGame(currentTopIndex);
+        
+        gameObject.SetActive(false);
+    }
+
+    public void ReturnToMenu()
+    {
+        gameObject.SetActive(true);
+    }
+
+    private void PlayPreview()
+    {
+        StopPreview();
+        TrackMenuItem selectedItem = menuItems[0].GetComponent<TrackMenuItem>();
+        if (selectedItem != null && selectedItem.previewAudioSource != null)
+        {
+            previewAudioSource.clip = selectedItem.previewAudioSource;
+            previewAudioSource.time = 0;
+            previewAudioSource.Play();
+        }
+    }
+
+    private void StopPreview()
+    {
+        if (previewAudioSource.isPlaying)
+        {
+            previewAudioSource.Stop();
+        }
+    }
+
+    private void SetupMenu()
+    {
+        if (isMoving || isSetup) return;
+        isMoving = true;
+
+        originalPosition = menuItems[0].transform.localPosition;
+
+        // Base Map과 Emission Map 모두 설정
+        TrackMenuItem selectedItem = menuItems[0].GetComponent<TrackMenuItem>();
+        if (selectedItem != null && albumMaterial != null)
+        {
+            albumMaterial.SetTexture("_BaseMap", selectedItem.albumArt);
+            albumMaterial.SetTexture("_EmissionMap", selectedItem.albumArt);
+            albumMaterial.EnableKeyword("_EMISSION"); // Emission 활성화
+        }
+
+        menuItems[0].transform.DOLocalMove(
+            originalPosition + new Vector3(0, 0, zOffset),
+            moveTime
+        ).SetEase(moveEase)
+        .OnComplete(() => {
+            isMoving = false;
+            isSetup = true;
+            PlayPreview();
+        });
+    }
+
+    private void ReturnToOriginalPosition()
+    {
+        if (isMoving || !isSetup) return;
+        isMoving = true;
+
+        // Base Map과 Emission Map 모두 초기화
+        if (albumMaterial != null)
+        {
+            albumMaterial.SetTexture("_BaseMap", null);
+            albumMaterial.SetTexture("_EmissionMap", null);
+            albumMaterial.DisableKeyword("_EMISSION"); // Emission 비활성화
+        }
+
+        menuItems[0].transform.DOLocalMove(
+            originalPosition,
+            moveTime
+        ).SetEase(moveEase)
+        .OnComplete(() => {
+            isMoving = false;
+            isSetup = false;
+        });
+    }
     private void InitializeMenuItems()
     {
         int itemCount = gameManager.availableTracks.Count;
@@ -66,17 +174,13 @@ public class MenuScroll : MonoBehaviour
         if (isMoving) return;
         isMoving = true;
 
-        // 임시 저장
         GameObject tempItem = menuItems[0];
-
-        // 아이템 배열 업데이트
         for (int i = 0; i < menuItems.Length - 1; i++)
         {
             menuItems[i] = menuItems[i + 1];
         }
         menuItems[menuItems.Length - 1] = tempItem;
 
-        // 모든 아이템을 새 위치로 이동
         int moveCount = 0;
         for (int i = 0; i < menuItems.Length; i++)
         {
@@ -90,7 +194,6 @@ public class MenuScroll : MonoBehaviour
                     }
                 });
         }
-
         currentTopIndex = (currentTopIndex + 1) % menuItems.Length;
     }
 
@@ -99,17 +202,13 @@ public class MenuScroll : MonoBehaviour
         if (isMoving) return;
         isMoving = true;
 
-        // 임시 저장
         GameObject tempItem = menuItems[menuItems.Length - 1];
-
-        // 아이템 배열 업데이트
         for (int i = menuItems.Length - 1; i > 0; i--)
         {
             menuItems[i] = menuItems[i - 1];
         }
         menuItems[0] = tempItem;
 
-        // 모든 아이템을 새 위치로 이동
         int moveCount = 0;
         for (int i = 0; i < menuItems.Length; i++)
         {
@@ -123,7 +222,6 @@ public class MenuScroll : MonoBehaviour
                     }
                 });
         }
-
         currentTopIndex = (currentTopIndex - 1 + menuItems.Length) % menuItems.Length;
     }
 }

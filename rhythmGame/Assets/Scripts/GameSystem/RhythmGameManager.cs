@@ -59,6 +59,15 @@ public class RhythmGameManager : MonoBehaviour
 
         SetupTrack();
     }
+    // StopMusic 함수 추가
+    public void StopMusic()
+    {
+        if (gameAudioSource != null)
+        {
+            gameAudioSource.Stop();
+        }
+        isPlaying = false;
+    }
 
     void Update()
     {
@@ -263,11 +272,22 @@ public class RhythmGameManager : MonoBehaviour
 
     public void EndGame()
     {
-        StopTrack();
+        if (gameAudioSource != null)
+        {
+            gameAudioSource.Stop();
+        }
+
+        StopAllCoroutines();
         isInitialized = false;
         isPlaying = false;
         notesGenerated = false;
-        noteManager.notes.Clear();
+
+        // 노트 매니저 정리
+        if (noteManager != null)
+        {
+            noteManager.ClearAll();  // 노트 매니저에 추가할 함수
+            noteManager.enabled = false;
+        }
     }
 
     public SequenceData GetCurrentTrackData()
