@@ -58,9 +58,25 @@ public class RhythmGameController : MonoBehaviour
     public CameraPositionController cameraPositionController;
     public MenuScroll menuScroll;
 
+    [Header("Combo Fade Settings")]
+    public float comboFadeDuration = 1f; // 서서히 사라지는 데 걸리는 시간
+    private Coroutine fadeComboCoroutine; // 진행 중인 페이드 코루틴
+    private CanvasGroup comboCanvasGroup; // Combo 텍스트를 감싸는 CanvasGroup
+
     void Start()
     {
         ResetScore();
+
+        if (comboText != null)
+        {
+            comboCanvasGroup = comboText.GetComponent<CanvasGroup>();
+            if (comboCanvasGroup == null)
+            {
+                comboCanvasGroup = comboText.gameObject.AddComponent<CanvasGroup>();
+            }
+            comboCanvasGroup.alpha = 0f; // 처음에는 투명
+        }
+
         isGameActive = true;
 
         // 게임 시작 전에는 매니저들 비활성화
@@ -220,9 +236,43 @@ public class RhythmGameController : MonoBehaviour
 
     private void UpdateComboText(string judgement)
     {
-        if (comboText != null)
+        if (comboText != null && currentCombo >= 1)
         {
-            comboText.text = currentCombo > 1 ? $"{currentCombo} Combo!\n{judgement}" : judgement;
+            comboText.text = $"{currentCombo} Combo!";
+
+            // 페이드 효과 적용
+            if (fadeComboCoroutine != null)
+            {
+                StopCoroutine(fadeComboCoroutine);
+            }
+            fadeComboCoroutine = StartCoroutine(FadeComboText());
+        }
+        else
+        {
+            comboText.text = "";
+        }
+
+     
+    }
+
+    private IEnumerator FadeComboText()
+    {
+        if (comboCanvasGroup != null)
+        {
+            comboCanvasGroup.alpha = 1f; // 완전히 보이도록 설정
+
+            // 지정된 시간 동안 유지
+            yield return new WaitForSeconds(0.1f);
+
+            // 서서히 알파 값 감소
+            float elapsedTime = 0f;
+            while (elapsedTime < comboFadeDuration)
+            {
+                elapsedTime += Time.deltaTime;
+                comboCanvasGroup.alpha = Mathf.Lerp(1f, 0f, elapsedTime / comboFadeDuration);
+                yield return null;
+            }
+            comboCanvasGroup.alpha = 0f; // 완전히 사라짐
         }
     }
 

@@ -13,6 +13,7 @@ public class JudgeManager : MonoBehaviour
     public float greatRange = 2.0f;
     public float goodRange = 3.5f;
     public float badRange = 4.0f;
+    public float missTiming = 1f; // 노트가 도착지 뒤에서 허용되는 시간
 
     public bool debugMode = false;
 
@@ -163,21 +164,22 @@ public class JudgeManager : MonoBehaviour
         {
             if (note != null && note.noteData.trackIndex == trackIndex)
             {
-                float distance = Mathf.Abs(note.transform.position.z - hitPosition.z);
-                if (debugMode) Debug.Log($"Note distance: {distance}");
+                float distance = note.transform.position.z - hitPosition.z;
 
-                if (distance < closestDistance)
+                if (distance >= -judgeRange && distance <= missTiming) // Miss 여유 시간 반영
                 {
-                    closestDistance = distance;
-                    closestNote = note;
+                    if (Mathf.Abs(distance) < closestDistance)
+                    {
+                        closestDistance = Mathf.Abs(distance);
+                        closestNote = note;
+                    }
                 }
             }
         }
 
-        if (closestNote != null && closestDistance <= judgeRange)
+        if (closestNote != null)
         {
-            if (debugMode) Debug.Log($"Judging note with distance: {closestDistance}");
-
+            // 노트가 있을 때의 판정 처리
             string result = "";
             GameObject effectPrefab = null;
 
@@ -219,7 +221,16 @@ public class JudgeManager : MonoBehaviour
                 closestNote.Hit();
             }
         }
-        // else 구문 제거 - 노트가 없을 때는 아무것도 하지 않음
+        else
+        {
+            //// 노트가 없을 때 눌렀다면 추가 처리
+            //if (debugMode) Debug.Log($"No note on track {trackIndex}, but key pressed.");
+
+            //// 단순한 효과나 로그 출력
+            //ShowJudgeEffect(trackIndex, missEffect);
+
+            //// 필요하면 다른 동작 추가
+        }
     }
 
     private void ShowJudgeEffect(int trackIndex, GameObject effectPrefab)
