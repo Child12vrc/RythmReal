@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e4dede7ba0653f1448388c3f834f71bc, type: 3}
   m_Name: Track_Project_TheSafari
   m_EditorClassIdentifier: 
-  bpm: 536
+  bpm: 540
   numberOfTracks: 4
   trackName: The Safari
   audioClip: {fileID: 8300000, guid: b35f6183939e1824599427e1eb6a502d, type: 3}
