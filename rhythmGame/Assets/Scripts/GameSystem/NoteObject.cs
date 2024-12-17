@@ -15,6 +15,7 @@ public class NoteObject : MonoBehaviour
     private float beatDuration;
     private NotePool pool;
     private JudgeManager judgeManager;
+    private float missAllowance = 1.0f; // 노트가 판정선을 지난 후 추가 판정 시간
 
     public void Initialize(Note note, float noteSpeed, Transform startPos, Transform targetPos,
         float gameStartTime, NotePool notePool, float beatDur)
@@ -59,7 +60,13 @@ public class NoteObject : MonoBehaviour
         }
         else
         {
-            if (!isMissed)
+            // 판정선에 도달한 후 missAllowance 시간 동안은 판정선에 머무름
+            if (progress <= 1.0f + (missAllowance / (exactHitTime - startJourneyTime)))
+            {
+                transform.position = targetPosition;
+            }
+            // missAllowance 시간이 지난 후에야 Miss 처리
+            else if (!isMissed)
             {
                 isMissed = true;
                 if (judgeManager != null)
@@ -90,5 +97,11 @@ public class NoteObject : MonoBehaviour
         {
             ReturnToPool();
         }
+    }
+
+    // 현재 노트와 판정선과의 거리를 반환
+    public float GetHitPointDistance()
+    {
+        return Vector3.Distance(transform.position, targetPosition);
     }
 }
