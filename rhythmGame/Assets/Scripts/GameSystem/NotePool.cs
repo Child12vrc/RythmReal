@@ -1,45 +1,89 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class NotePool : MonoBehaviour
 {
-    private Queue<NoteObject> pooledNotes = new Queue<NoteObject>();
     private GameObject notePrefab;
-    private int poolSize = 100;  // 초기 풀 크기
+    private List<NoteObject> pool = new List<NoteObject>();
+    private const int initialPoolSize = 20;
 
     public void Initialize(GameObject prefab)
     {
+        if (prefab == null)
+        {
+            Debug.LogError("[NotePool] Prefab is null!");
+            return;
+        }
+
         notePrefab = prefab;
-        for (int i = 0; i < poolSize; i++)
+        pool.Clear();
+
+        // 초기 풀 생성
+        for (int i = 0; i < initialPoolSize; i++)
         {
             CreateNewNote();
         }
     }
 
-    private void CreateNewNote()
+    private NoteObject CreateNewNote()
     {
-        GameObject noteObj = Instantiate(notePrefab);
+        if (notePrefab == null)
+        {
+            Debug.LogError("[NotePool] Prefab is null in CreateNewNote!");
+            return null;
+        }
+
+        GameObject noteObj = Instantiate(notePrefab, transform);
         noteObj.SetActive(false);
-        noteObj.transform.SetParent(transform);
-        pooledNotes.Enqueue(noteObj.GetComponent<NoteObject>());
+        NoteObject note = noteObj.GetComponent<NoteObject>();
+        pool.Add(note);
+        return note;
     }
 
     public NoteObject GetNote()
     {
-        if (pooledNotes.Count == 0)
+        // null인 노트 제거
+        pool.RemoveAll(note => note == null);
+
+        // 사용 가능한 노트 찾기
+        NoteObject note = pool.Find(n => n != null && !n.gameObject.activeSelf);
+
+        // 없으면 새로 생성
+        if (note == null)
         {
-            CreateNewNote();
+            note = CreateNewNote();
         }
 
-        NoteObject note = pooledNotes.Dequeue();
-        note.gameObject.SetActive(true);
+        if (note != null)
+        {
+            note.gameObject.SetActive(true);
+        }
+
         return note;
     }
 
     public void ReturnNote(NoteObject note)
     {
-        note.gameObject.SetActive(false);
-        note.transform.SetParent(transform);
-        pooledNotes.Enqueue(note);
+        if (note != null && note.gameObject != null)
+        {
+            note.gameObject.SetActive(false);
+        }
+    }
+
+    public void ClearPool()
+    {
+        foreach (var note in pool)
+        {
+            if (note != null && note.gameObject != null)
+            {
+                Destroy(note.gameObject);
+            }
+        }
+        pool.Clear();
+    }
+
+    private void OnDestroy()
+    {
+        ClearPool();
     }
 }

@@ -9,7 +9,7 @@ public class RhythmGameManager : MonoBehaviour
     public float playbackSpeed = 1.0f;
     private bool notesGenerated = false;
 
-    private AudioSource gameAudioSource;
+    public AudioSource gameAudioSource;
     private bool isPlaying = false;
     private bool isInitialized = false;
 
@@ -20,45 +20,44 @@ public class RhythmGameManager : MonoBehaviour
 
     void Start()
     {
-        gameAudioSource = GetComponent<AudioSource>();
-        if (gameAudioSource == null)
-        {
-            gameAudioSource = gameObject.AddComponent<AudioSource>();
-        }
-
+      
         gameController = GetComponent<RhythmGameController>();
+
+        // 명시적으로 gameController 할당
+        if (gameController == null)
+        {
+            gameController = FindObjectOfType<RhythmGameController>();
+            if (gameController == null)
+            {
+                Debug.LogError("RhythmGameController not found!");
+            }
+        }
     }
 
     public void Initialize()
     {
         if (isInitialized) return;
 
+        // AudioSource 처리 수정
+        if (gameAudioSource == null)
+        {
+            gameAudioSource = GetComponent<AudioSource>();
+            if (gameAudioSource == null)
+            {
+                gameAudioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+        else
+        {
+            // 기존 AudioSource가 있다면 초기화만 수행
+            gameAudioSource.Stop();
+            gameAudioSource.time = 0;
+        }
+
         isInitialized = true;
         LoadCurrentTrack();
     }
 
-    private void LoadCurrentTrack()
-    {
-        if (availableTracks == null || availableTracks.Count == 0)
-        {
-            Debug.LogError("No tracks available!");
-            return;
-        }
-
-        sequenceData = availableTracks[currentTrackIndex];
-        sequenceData.LoadFromJson();
-
-        if (sequenceData.trackNotes == null || sequenceData.trackNotes.Count == 0)
-        {
-            InitializeTrackNotes();
-        }
-        if (sequenceData.effectTrack == null)
-        {
-            InitializeEffectTrack();
-        }
-
-        SetupTrack();
-    }
     // StopMusic 함수 추가
     public void StopMusic()
     {
@@ -73,30 +72,17 @@ public class RhythmGameManager : MonoBehaviour
     {
         if (isPlaying && !gameAudioSource.isPlaying && gameAudioSource.time > 0)
         {
-            // 음악이 끝났을 때
+            Debug.Log("Song Complete! Controller: " + (gameController != null));
             isPlaying = false;
             if (gameController != null)
             {
                 gameController.OnSongComplete();
+                Debug.Log("OnSongComplete called");
             }
             EndGame();
         }
     }
 
-
-    private void SetupTrack()
-    {
-        noteManager.audioClip = sequenceData.audioClip;
-        noteManager.bpm = sequenceData.bpm;
-        noteManager.SetSpeed(playbackSpeed);
-        noteManager.SetSequenceData(sequenceData);
-
-        notesGenerated = false;
-        GenerateNotes();
-        noteManager.Initialize();
-
-        isPlaying = true;
-    }
 
     public void PauseGame()
     {
@@ -127,7 +113,15 @@ public class RhythmGameManager : MonoBehaviour
     public void RestartTrack()
     {
         StopTrack();
-        SetupTrack();
+        isInitialized = false;  // 초기화 상태 리셋
+        notesGenerated = false; // 노트 생성 상태 리셋
+
+        if (gameAudioSource != null)
+        {
+            gameAudioSource.time = 0;
+        }
+
+        Initialize(); // 트랙 다시 초기화
     }
 
     private void StopTrack()
@@ -138,7 +132,11 @@ public class RhythmGameManager : MonoBehaviour
         }
         Time.timeScale = 1;
         isPlaying = false;
-        noteManager.notes.Clear();
+
+        if (noteManager != null)
+        {
+            noteManager.ClearAll();
+        }
     }
 
     public void NextTrack()
@@ -158,12 +156,18 @@ public class RhythmGameManager : MonoBehaviour
 
     public void ChangeTrack(int trackIndex)
     {
-        if (trackIndex >= 0 && trackIndex < availableTracks.Count)
+        Debug.Log($"[RGM] Changing track to index: {trackIndex}");
+        if (currentTrackIndex == trackIndex && isInitialized)
         {
-            StopTrack();
-            currentTrackIndex = trackIndex;
-            LoadCurrentTrack();
+            Debug.Log("[RGM] Track is already loaded and initialized");
+            return;
         }
+
+        StopTrack();
+        isInitialized = false;
+        notesGenerated = false;
+        currentTrackIndex = trackIndex;
+        Initialize();  // 트랙 변경 후 바로 초기화까지 수행
     }
 
     private void InitializeEffectTrack()
@@ -190,11 +194,41 @@ public class RhythmGameManager : MonoBehaviour
 
     private void GenerateNotes()
     {
-        if (notesGenerated) return;
+        //Debug.Log("[RGM] Starting note generation");
+
+        if (notesGenerated)
+        {
+            //Debug.Log("[RGM] Notes already generated, returning");
+            return;
+        }
+
+        if (noteManager == null)
+        {
+            //Debug.LogError("[RGM] NoteManager is null!");
+            return;
+        }
+
+        //Debug.Log($"[RGM] Clearing existing notes. Current note count: {noteManager.notes.Count}");
         noteManager.notes.Clear();
+
+        if (sequenceData == null || sequenceData.trackNotes == null)
+        {
+            //Debug.LogError("[RGM] SequenceData or trackNotes is null!");
+            return;
+        }
+
+        //Debug.Log($"[RGM] Track count: {sequenceData.trackNotes.Count}");
 
         for (int trackIndex = 0; trackIndex < sequenceData.trackNotes.Count; trackIndex++)
         {
+            if (sequenceData.trackNotes[trackIndex] == null)
+            {
+                Debug.LogError($"[RGM] Track {trackIndex} is null!");
+                continue;
+            }
+
+            //Debug.Log($"[RGM] Generating notes for track {trackIndex}. Note count: {sequenceData.trackNotes[trackIndex].Count}");
+
             for (int beatIndex = 0; beatIndex < sequenceData.trackNotes[trackIndex].Count; beatIndex++)
             {
                 int noteValue = sequenceData.trackNotes[trackIndex][beatIndex];
@@ -219,10 +253,65 @@ public class RhythmGameManager : MonoBehaviour
 
                     Note note = new Note(trackIndex, startTime, duration, noteValue);
                     noteManager.AddNote(note);
+                    //Debug.Log($"[RGM] Added note: Track={trackIndex}, Time={startTime:F2}, Value={noteValue}");
                 }
             }
         }
+
         notesGenerated = true;
+        //Debug.Log($"[RGM] Note generation complete. Total notes: {noteManager.notes.Count}");
+    }
+
+    private void LoadCurrentTrack()
+    {
+        Debug.Log($"[RGM] Loading track {currentTrackIndex}");
+        if (availableTracks == null || availableTracks.Count == 0)
+        {
+            Debug.LogError("[RGM] No tracks available!");
+            return;
+        }
+
+        sequenceData = availableTracks[currentTrackIndex];
+        sequenceData.LoadFromJson();
+
+        Debug.Log($"[RGM] Track loaded. Has notes: {sequenceData.trackNotes != null}, Has effect track: {sequenceData.effectTrack != null}");
+
+        if (sequenceData.trackNotes == null || sequenceData.trackNotes.Count == 0)
+        {
+            Debug.Log("[RGM] Initializing track notes");
+            InitializeTrackNotes();
+        }
+        if (sequenceData.effectTrack == null)
+        {
+            Debug.Log("[RGM] Initializing effect track");
+            InitializeEffectTrack();
+        }
+
+        SetupTrack();
+    }
+
+    private void SetupTrack()
+    {
+        if (noteManager != null)
+        {
+            noteManager.audioClip = sequenceData.audioClip;
+            noteManager.bpm = sequenceData.bpm;
+            noteManager.SetSpeed(playbackSpeed);
+            noteManager.SetSequenceData(sequenceData);
+
+            // AudioSource 설정도 여기서 수행
+            if (gameAudioSource != null)
+            {
+                gameAudioSource.clip = sequenceData.audioClip;
+                gameAudioSource.playOnAwake = false;
+            }
+
+            notesGenerated = false;
+            GenerateNotes();
+            noteManager.Initialize();
+        }
+
+        isPlaying = true;
     }
 
     public int GetCurrentEffect()

@@ -16,6 +16,7 @@ public class RhythmGameController : MonoBehaviour
 
     [Header("Game Management")]
     public RhythmGameManager gameManager;
+    public NoteManager noteManager;
     public JudgeManager judgeManager;
     public KeyCode startKey = KeyCode.Return;  // Enter 키로 시작
     public KeyCode nextTrackKey = KeyCode.RightArrow;
@@ -29,12 +30,23 @@ public class RhythmGameController : MonoBehaviour
     private bool isGameActive = false;
     private GameState currentGameState = GameState.Menu;
 
-
     [Header("Score UI")]
     public Text scoreText;
     public Text comboText;
     public Text gradeText;
     public Text accuracyText;
+
+    [Header("Game Over UI")]
+    public GameObject gameOverPanel;
+    public TextMeshProUGUI finalScoreText;
+    public TextMeshProUGUI finalGradeText;
+    public TextMeshProUGUI finalAccuracyText;
+    public TextMeshProUGUI finalComboText;
+    public TextMeshProUGUI finalPerfectText;
+    public TextMeshProUGUI finalGoodText;
+    public TextMeshProUGUI finalMissText;
+    public Button retryButton;
+    public Button menuButton;
 
     [Header("Score Settings")]
     public int perfectScore = 100;
@@ -53,15 +65,15 @@ public class RhythmGameController : MonoBehaviour
     private int misses = 0;
 
     [Header("Guide UI")]
-    public TextMeshProUGUI pressToStartText;  // TextMeshPro로 변경
+    public TextMeshProUGUI pressToStartText;
 
     public CameraPositionController cameraPositionController;
     public MenuScroll menuScroll;
 
     [Header("Combo Fade Settings")]
-    public float comboFadeDuration = 1f; // 서서히 사라지는 데 걸리는 시간
-    private Coroutine fadeComboCoroutine; // 진행 중인 페이드 코루틴
-    private CanvasGroup comboCanvasGroup; // Combo 텍스트를 감싸는 CanvasGroup
+    public float comboFadeDuration = 1f;
+    private Coroutine fadeComboCoroutine;
+    private CanvasGroup comboCanvasGroup;
 
     void Start()
     {
@@ -74,16 +86,39 @@ public class RhythmGameController : MonoBehaviour
             {
                 comboCanvasGroup = comboText.gameObject.AddComponent<CanvasGroup>();
             }
-            comboCanvasGroup.alpha = 0f; // 처음에는 투명
+            comboCanvasGroup.alpha = 0f;
         }
 
         isGameActive = true;
 
-        // 게임 시작 전에는 매니저들 비활성화
         if (gameManager != null) gameManager.enabled = false;
         if (judgeManager != null) judgeManager.enabled = false;
         SetGameState(GameState.Menu);
-        ShowPressToStart(true);  // 시작 시 안내 텍스트 표시
+        ShowPressToStart(true);
+
+        // 게임 오버 UI 초기화
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+
+        if (retryButton != null)
+        {
+            retryButton.onClick.RemoveAllListeners(); // 기존 리스너 제거
+            retryButton.onClick.AddListener(() => {
+                RestartCurrentTrack();
+                Debug.Log("Retry button clicked");
+            });
+        }
+
+        if (menuButton != null)
+        {
+            menuButton.onClick.RemoveAllListeners(); // 기존 리스너 제거
+            menuButton.onClick.AddListener(() => {
+                ReturnToMenu();
+                Debug.Log("Menu button clicked");
+            });
+        }
     }
 
     private void ShowPressToStart(bool show)
@@ -95,40 +130,210 @@ public class RhythmGameController : MonoBehaviour
         }
     }
 
+    private void ShowGameOverUI()
+    {
+        gameOverPanel.SetActive(true);
+        finalScoreText.gameObject.SetActive(true);
+        finalGradeText.gameObject.SetActive(true);
+        finalAccuracyText.gameObject.SetActive(true);
+        finalComboText.gameObject.SetActive(true);
+        finalPerfectText.gameObject.SetActive(true);
+        finalGoodText.gameObject.SetActive(true);
+        finalMissText.gameObject.SetActive(true);
+    }
+
+    private void SaveAndUpdateHighScore(int score, string grade)
+    {
+        string trackName = gameManager.GetCurrentTrackInfo();
+        int highScore = PlayerPrefs.GetInt($"HighScore_{trackName}", 0);
+        if (score > highScore)
+        {
+            PlayerPrefs.SetInt($"HighScore_{trackName}", score);
+            PlayerPrefs.SetString($"HighScore_{trackName}_Grade", grade);
+            PlayerPrefs.Save();
+        }
+    }
+
+    private string GetGradeFromAccuracy(float accuracy)
+    {
+        if (accuracy >= 95) return "S";
+        else if (accuracy >= 90) return "A";
+        else if (accuracy >= 80) return "B";
+        else if (accuracy >= 70) return "C";
+        else return "D";
+    }
+
+    private IEnumerator AnimateScoreText(TextMeshProUGUI scoreText, int finalScore)
+    {
+        scoreText.gameObject.SetActive(true);
+        int startScore = 0;
+        float elapsedTime = 0f;
+        float animationDuration = 1f;
+
+        while (elapsedTime < animationDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            int currentScore = Mathf.FloorToInt(Mathf.Lerp(startScore, finalScore, elapsedTime / animationDuration));
+            scoreText.text = $"Score: {currentScore:N0}";
+            yield return null;
+        }
+
+        scoreText.text = $"Score: {finalScore:N0}";
+    }
+
+    private IEnumerator AnimateComboText(TextMeshProUGUI comboText, int finalCombo)
+    {
+        int startCombo = 0;
+        float elapsedTime = 0f;
+        float animationDuration = 1f;
+
+        while (elapsedTime < animationDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            int currentCombo = Mathf.FloorToInt(Mathf.Lerp(startCombo, finalCombo, elapsedTime / animationDuration));
+            comboText.text = $"Max Combo: {currentCombo}";
+            yield return null;
+        }
+
+        comboText.text = $"Max Combo: {finalCombo}";
+    }
+
+    private IEnumerator AnimateAccuracyText(TextMeshProUGUI accuracyText, float finalAccuracy)
+    {
+        float startAccuracy = 0f;
+        float elapsedTime = 0f;
+        float animationDuration = 1f;
+
+        while (elapsedTime < animationDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            float currentAccuracy = Mathf.Lerp(startAccuracy, finalAccuracy, elapsedTime / animationDuration);
+            accuracyText.text = $"Accuracy: {currentAccuracy:F2}%";
+            yield return null;
+        }
+
+        accuracyText.text = $"Accuracy: {finalAccuracy:F2}%";
+    }
+
+    private IEnumerator AnimatePerfectGoodMissText(TextMeshProUGUI perfectText, int perfectCount, TextMeshProUGUI goodText, int goodCount, TextMeshProUGUI missText, int missCount)
+    {
+        perfectText.text = $"Perfect: {perfectCount}";
+        goodText.text = $"Good: {goodCount}";
+        missText.text = $"Miss: {missCount}";
+
+        float elapsedTime = 0f;
+        float animationDuration = 0.5f;
+
+        while (elapsedTime < animationDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            perfectText.alpha = Mathf.Lerp(0f, 1f, elapsedTime / animationDuration);
+            goodText.alpha = Mathf.Lerp(0f, 1f, elapsedTime / animationDuration);
+            missText.alpha = Mathf.Lerp(0f, 1f, elapsedTime / animationDuration);
+            yield return null;
+        }
+
+        perfectText.alpha = 1f;
+        goodText.alpha = 1f;
+        missText.alpha = 1f;
+    }
+
+    public IEnumerator GameOverSequence()
+    {
+        // 게임 오버 UI 표시
+        ShowGameOverUI();
+
+        // 점수 계산
+        float accuracy = (perfectHits * 100.0f + goodHits * 60.0f) / (hitNotes + misses) / 100.0f;
+        string grade = GetGradeFromAccuracy(accuracy);
+
+        // 점수 저장 및 최고 점수 업데이트
+        SaveAndUpdateHighScore(currentScore, grade);
+
+        // 점수, 콤보, 정확도, 등급 애니메이션 효과
+        yield return StartCoroutine(AnimateScoreText(finalScoreText, currentScore));
+        yield return StartCoroutine(AnimateComboText(finalComboText, maxCombo));
+        yield return StartCoroutine(AnimateAccuracyText(finalAccuracyText, accuracy));
+        yield return StartCoroutine(AnimateGradeText(finalGradeText, grade));
+        yield return StartCoroutine(AnimatePerfectGoodMissText(finalPerfectText, perfectHits, finalGoodText, goodHits, finalMissText, misses));
+    }
+
+    private IEnumerator AnimateGradeText(TextMeshProUGUI gradeText, string grade)
+    {
+        gradeText.gameObject.SetActive(true);
+        string startGrade = "D";
+        float elapsedTime = 0f;
+        float animationDuration = 0.5f;
+
+        while (elapsedTime < animationDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            float t = elapsedTime / animationDuration;
+            string currentGrade = Mathf.Lerp(0, 1, t) < 0.25f ? "D" : Mathf.Lerp(0, 1, t) < 0.5f ? "C" : Mathf.Lerp(0, 1, t) < 0.75f ? "B" : "A";
+            gradeText.text = $"Grade: {currentGrade}";
+            yield return null;
+        }
+
+        gradeText.text = $"Grade: {grade}";
+    }
+
+    private void HideGameOverUI()
+    {
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+    }
+
     public void StartGame(int trackIndex = 0)
     {
         StartCoroutine(GameStartSequence(trackIndex));
-        ShowPressToStart(false);  // 게임 시작 시 안내 텍스트 숨김
+        ShowPressToStart(false);
     }
 
-    // 게임 완료 시 호출될 메서드
     public void OnSongComplete()
     {
-        ReturnToMenu();
-        ShowPressToStart(true);  // 메뉴로 돌아갈 때 안내 텍스트 다시 표시
+        StartCoroutine(GameOverSequence());
     }
 
     private IEnumerator GameStartSequence(int trackIndex)
     {
+        Debug.Log($"[RGC] GameStartSequence for track {trackIndex} started");
         SetGameState(GameState.Ready);
         ResetScore();
 
-        // 게임 매니저들 활성화
         if (gameManager != null)
         {
             gameManager.enabled = true;
-            gameManager.ChangeTrack(trackIndex);
+
+            // 트랙 변경과 초기화를 한 번에 처리
+            if (trackIndex != gameManager.GetCurrentTrackIndex())
+            {
+                gameManager.ChangeTrack(trackIndex);
+            }
+            else
+            {
+                gameManager.Initialize();
+            }
         }
-        if (judgeManager != null) judgeManager.enabled = true;
 
-        // 여기에 게임 시작 연출을 위한 대기 시간 추가 가능
-        yield return new WaitForSeconds(1f); // 연출을 위한 대기 시간
+        if (noteManager != null)
+        {
+            noteManager.enabled = true;
+        }
 
-        // 게임 시작
+        if (judgeManager != null)
+        {
+            judgeManager.enabled = true;
+        }
+
+        yield return new WaitForSeconds(1f);
+
         isGameStarted = true;
         isGameActive = true;
         SetGameState(GameState.Playing);
-        gameManager.Initialize(); // 이제 초기화하면 음악과 노트가 시작됨
+
+        Debug.Log("[RGC] GameStartSequence complete");
     }
 
     void Update()
@@ -140,12 +345,11 @@ public class RhythmGameController : MonoBehaviour
                 {
                     StartGame(gameManager.GetCurrentTrackIndex());
                 }
-  
                 break;
 
             case GameState.Playing:
+            case GameState.GameOver:
                 HandleGameControls();
-                // HandleNoteInput 제거 - JudgeManager가 직접 처리
                 break;
 
             case GameState.Paused:
@@ -159,15 +363,25 @@ public class RhythmGameController : MonoBehaviour
 
     private void HandleGameControls()
     {
-        if (Input.GetKeyDown(pauseKey))  // ESC 키
+        if (Input.GetKeyDown(pauseKey))
         {
-            // 음악 멈추고 메뉴로 복귀
-            // 게임 종료 처리
-            gameManager.EndGame();  // 게임 매니저의 EndGame 호출
-            ReturnToMenu();
-            menuScroll.ReturnToMenu();
-            cameraPositionController.MoveCameraToPosition(1);
+            if (currentGameState == GameState.GameOver)
+            {
+                HideGameOverUI();
+                ReturnToMenu();
+                menuScroll.ReturnToMenu();
+                cameraPositionController.MoveCameraToPosition(1);
+            }
+            else
+            {
+                gameManager.EndGame();
+                ReturnToMenu();
+                menuScroll.ReturnToMenu();
+                cameraPositionController.MoveCameraToPosition(1);
+            }
         }
+
+        if (currentGameState == GameState.GameOver) return;
 
         if (isPaused) return;
 
@@ -186,7 +400,6 @@ public class RhythmGameController : MonoBehaviour
         }
     }
 
-    // JudgeManager의 판정 결과를 받아서 점수 처리
     public void OnJudgeResult(string result, float timing)
     {
         switch (result)
@@ -218,7 +431,7 @@ public class RhythmGameController : MonoBehaviour
 
     private void AddScore(int score, string judgement)
     {
-        currentScore += score * (1 + currentCombo / 50); // 콤보 보너스
+        currentScore += score * (1 + currentCombo / 50);
         currentCombo++;
         maxCombo = Mathf.Max(maxCombo, currentCombo);
 
@@ -240,7 +453,6 @@ public class RhythmGameController : MonoBehaviour
         {
             comboText.text = $"{currentCombo} Combo!";
 
-            // 페이드 효과 적용
             if (fadeComboCoroutine != null)
             {
                 StopCoroutine(fadeComboCoroutine);
@@ -251,20 +463,16 @@ public class RhythmGameController : MonoBehaviour
         {
             comboText.text = "";
         }
-
-     
     }
 
     private IEnumerator FadeComboText()
     {
         if (comboCanvasGroup != null)
         {
-            comboCanvasGroup.alpha = 1f; // 완전히 보이도록 설정
+            comboCanvasGroup.alpha = 1f;
 
-            // 지정된 시간 동안 유지
             yield return new WaitForSeconds(0.1f);
 
-            // 서서히 알파 값 감소
             float elapsedTime = 0f;
             while (elapsedTime < comboFadeDuration)
             {
@@ -272,7 +480,7 @@ public class RhythmGameController : MonoBehaviour
                 comboCanvasGroup.alpha = Mathf.Lerp(1f, 0f, elapsedTime / comboFadeDuration);
                 yield return null;
             }
-            comboCanvasGroup.alpha = 0f; // 완전히 사라짐
+            comboCanvasGroup.alpha = 0f;
         }
     }
 
@@ -316,20 +524,47 @@ public class RhythmGameController : MonoBehaviour
 
     private void StartNewTrack(System.Action trackChangeAction)
     {
-        // 현재 점수 저장 또는 처리
         SaveCurrentScore();
-
-        // 트랙 변경
         trackChangeAction?.Invoke();
-
-        // 새로운 트랙 시작 준비
         ResetScore();
     }
 
     private void RestartCurrentTrack()
     {
-        gameManager.RestartTrack();
+        // 게임 오버 UI 숨기기
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+
+        // 점수 초기화
         ResetScore();
+
+        // 게임 상태 초기화
+        SetGameState(GameState.Playing);
+        isGameStarted = true;
+        isGameActive = true;
+        isPaused = false;
+
+        // 게임 매니저와 저지 매니저 활성화
+        if (gameManager != null)
+        {
+            gameManager.enabled = true;
+            gameManager.RestartTrack();
+        }
+
+
+        if (noteManager != null)
+        {
+            noteManager.enabled = true;
+        }
+
+
+        if (judgeManager != null)
+        {
+            judgeManager.enabled = true;
+            judgeManager.ClearAllNotes();
+        }
     }
 
     private void ResetScore()
@@ -350,14 +585,11 @@ public class RhythmGameController : MonoBehaviour
 
     private void SaveCurrentScore()
     {
-        // 여기에 점수 저장 로직 구현
-        // 예: PlayerPrefs 사용 또는 데이터베이스 저장
         string trackName = gameManager.GetCurrentTrackInfo();
         PlayerPrefs.SetInt($"HighScore_{trackName}", Mathf.Max(PlayerPrefs.GetInt($"HighScore_{trackName}", 0), currentScore));
         PlayerPrefs.Save();
     }
 
-    // 게임 종료 시 점수 저장
     void OnDisable()
     {
         SaveCurrentScore();
@@ -418,6 +650,12 @@ public class RhythmGameController : MonoBehaviour
     {
         StopAllCoroutines();
 
+        // 게임 오버 UI 숨기기
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+
         // 게임 매니저 정리
         if (gameManager != null)
         {
@@ -428,7 +666,7 @@ public class RhythmGameController : MonoBehaviour
         // 저지 매니저 정리
         if (judgeManager != null)
         {
-            judgeManager.ClearAllNotes();  // 노트 매니저 클리어 함수 필요
+            judgeManager.ClearAllNotes();
             judgeManager.enabled = false;
         }
 
@@ -438,6 +676,13 @@ public class RhythmGameController : MonoBehaviour
         isGameStarted = false;
         isGameActive = false;
         isPaused = false;
+
+        // UI 초기화
+        ShowPressToStart(true);
+
+        // 메뉴로 이동
+        menuScroll.ReturnToMenu();
+        cameraPositionController.MoveCameraToPosition(1);
 
         // 시간 스케일 리셋
         Time.timeScale = 1;
@@ -462,8 +707,6 @@ public class RhythmGameController : MonoBehaviour
         hitNotes++;
         UpdateAccuracy();
     }
-
-    // 외부에서 접근 가능한 현재 게임 상태 정보
     public int GetCurrentScore() => currentScore;
     public int GetMaxCombo() => maxCombo;
     public float GetAccuracy() => hitNotes > 0 ? (perfectHits * 100.0f + goodHits * 60.0f) / (hitNotes + misses) : 0f;

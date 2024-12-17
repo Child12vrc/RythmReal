@@ -35,6 +35,7 @@ public class NoteManager : MonoBehaviour
 
     private void TriggerEffect(int effectValue)
     {
+        Debug.Log($"[NoteManager] Triggering effect: {effectValue}");
         if (effectManager != null)
         {
             effectManager.ResetEffects();
@@ -43,19 +44,35 @@ public class NoteManager : MonoBehaviour
                 effectManager.SetEffect(effectValue, true);
                 if (debugMode)
                 {
-                    Debug.Log($"Effect {effectValue} activated");
+                    Debug.Log($"[NoteManager] Effect {effectValue} activated");
                 }
             }
+        }
+        else
+        {
+            Debug.LogWarning("[NoteManager] EffectManager is null");
         }
     }
 
     public void Initialize()
     {
+        Debug.Log("[NoteManager] Initialize start");
+
+        if (notePrefabs == null)
+        {
+            Debug.LogError("[NoteManager] NotePrefabs is not assigned!");
+            return;
+        }
+
+        // NotePool 초기화
         GameObject poolObject = new GameObject("NotePool");
         poolObject.transform.SetParent(transform);
         notePool = poolObject.AddComponent<NotePool>();
+        Debug.Log("[NoteManager] NotePool created");
         notePool.Initialize(notePrefabs);
+        Debug.Log("[NoteManager] NotePool initialized");
 
+        // AudioVisualizer 초기화
         if (audioVisualizer == null)
         {
             audioVisualizer = gameObject.GetComponent<AudioVisualizer>();
@@ -64,44 +81,54 @@ public class NoteManager : MonoBehaviour
                 audioVisualizer = gameObject.AddComponent<AudioVisualizer>();
                 audioVisualizer.visualizerObjects = visualizerObjects;
             }
+            Debug.Log("[NoteManager] AudioVisualizer setup complete");
         }
 
-        AudioSource existingAudioSource = gameObject.GetComponent<AudioSource>();
-        if (existingAudioSource != null)
+        // AudioSource 초기화
+        if (audioSource == null)
         {
-            Destroy(existingAudioSource);
+            audioSource = gameObject.GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
         }
-        audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.clip = audioClip;
         audioSource.playOnAwake = false;
+        Debug.Log($"[NoteManager] AudioSource setup complete. Clip assigned: {audioClip != null}");
 
+        // 시간 설정
         startTime = Time.time;
         audioStartTime = startTime + initialDelay;
 
+        // 노트 초기화
+        Debug.Log($"[NoteManager] Current notes count: {notes.Count}");
         activeNotes.Clear();
         activeNotes.AddRange(notes);
         activeNotes.Sort((a, b) => a.startTime.CompareTo(b.startTime));
+        Debug.Log($"[NoteManager] Active notes initialized: {activeNotes.Count}");
 
+        // 오프셋 계산
         CalculateSpawnOffsets();
 
-        if (debugMode)
-        {
-            CreateDebugLines();
-        }
-
+    
         StartCoroutine(StartAudioWithDelay());
+        Debug.Log("[NoteManager] Started audio delay coroutine");
 
         currentEffectBeat = -1;
         isInitialized = true;
+        Debug.Log("[NoteManager] Initialization complete");
     }
 
     public void SetSequenceData(SequenceData data)
     {
+        Debug.Log($"[NoteManager] Setting sequence data: {data != null}");
         sequenceData = data;
     }
 
     private IEnumerator StartAudioWithDelay()
     {
+        Debug.Log("[NoteManager] Starting audio with delay");
         if (audioSource.isPlaying)
         {
             audioSource.Stop();
@@ -109,13 +136,15 @@ public class NoteManager : MonoBehaviour
 
         yield return new WaitForSeconds(initialDelay - audioLatency);
         audioSource.Play();
+        Debug.Log("[NoteManager] Audio started");
     }
 
     private void CalculateSpawnOffsets()
     {
+        Debug.Log("[NoteManager] Calculating spawn offsets");
         if (spawnPoints == null || hitPoints == null || spawnPoints.Length != hitPoints.Length)
         {
-            Debug.LogError("Spawn points and hit points must be set and have the same length!");
+            Debug.LogError("[NoteManager] Spawn points or hit points setup is invalid");
             return;
         }
 
@@ -126,33 +155,45 @@ public class NoteManager : MonoBehaviour
             float distance = Vector3.Distance(spawnPoints[i].position, hitPoints[i].position);
             float beatDuration = 60f / bpm;
             spawnOffsets[i] = distance / noteSpeed;
-
-            if (debugMode)
-            {
-                Debug.Log($"Track {i} - Distance: {distance:F3}, Spawn Offset: {spawnOffsets[i]:F3}, Beat Duration: {beatDuration:F3}");
-            }
+            Debug.Log($"[NoteManager] Track {i} - Distance: {distance:F3}, Offset: {spawnOffsets[i]:F3}");
         }
     }
 
-    // NoteManager.cs에 추가할 함수
     public void ClearAll()
     {
+        Debug.Log("[NoteManager] ClearAll called");
         notes.Clear();
+        activeNotes.Clear();
         StopAllCoroutines();
 
-        // 활성화된 모든 노트 오브젝트 제거
-        foreach (Transform child in transform)
+        if (notePool != null)
         {
-            Destroy(child.gameObject);
+            Debug.Log("[NoteManager] Clearing note pool");
+            notePool.ClearPool();
+            Destroy(notePool.gameObject);
+            notePool = null;
         }
+
+        if (audioSource != null)
+        {
+            audioSource.Stop();
+            audioSource.time = 0;
+        }
+
+        isInitialized = false;
+        Debug.Log("[NoteManager] ClearAll complete");
     }
+
     void Update()
     {
-        if (!isInitialized || spawnPoints == null || hitPoints == null || spawnPoints.Length == 0) return;
+        if (!isInitialized || spawnPoints == null || hitPoints == null || spawnPoints.Length == 0)
+        {
+            if (debugMode) Debug.Log("[NoteManager] Skip update - not initialized or invalid setup");
+            return;
+        }
 
         songPosition = (Time.time - audioStartTime) + audioLatency;
 
-        // 이펙트 처리
         UpdateEffects();
 
         for (int i = activeNotes.Count - 1; i >= 0; i--)
@@ -166,6 +207,7 @@ public class NoteManager : MonoBehaviour
 
             if (songPosition >= spawnTime)
             {
+                if (debugMode) Debug.Log($"[NoteManager] Spawning note for track {trackIndex} at time {songPosition:F2}");
                 SpawnNoteObject(note);
                 activeNotes.RemoveAt(i);
             }
@@ -174,12 +216,20 @@ public class NoteManager : MonoBehaviour
 
     private NoteObject SpawnNoteObject(Note note)
     {
+        Debug.Log($"[NoteManager] Attempting to spawn note for track {note.trackIndex}");
+
+        if (notePool == null)
+        {
+            Debug.LogError("[NoteManager] NotePool is null!");
+            return null;
+        }
+
         int trackIndex = Mathf.Clamp(note.trackIndex, 0, spawnPoints.Length - 1);
         NoteObject noteComponent = notePool.GetNote();
 
         if (noteComponent == null)
         {
-            Debug.LogWarning("NotePool has no available NoteObject to spawn.");
+            Debug.LogError("[NoteManager] Failed to get note from pool");
             return null;
         }
 
@@ -190,94 +240,28 @@ public class NoteManager : MonoBehaviour
         noteComponent.Initialize(note, noteSpeed, spawnPoints[trackIndex],
             hitPoints[trackIndex], audioStartTime, notePool, beatDuration);
 
+        Debug.Log($"[NoteManager] Successfully spawned note for track {trackIndex}");
         return noteComponent;
-    }
-
-    void OnGUI()
-    {
-        if (debugMode && isInitialized)
-        {
-            float beatDuration = 60f / bpm;
-            float currentBeat = songPosition / beatDuration;
-
-            GUI.Label(new Rect(10, 10, 200, 20), $"Song Time: {songPosition:F3}");
-            GUI.Label(new Rect(10, 30, 200, 20), $"Audio Time: {audioSource.time:F3}");
-            GUI.Label(new Rect(10, 50, 200, 20), $"Current Beat: {currentBeat:F2}");
-            GUI.Label(new Rect(10, 70, 200, 20), $"Beat Duration: {beatDuration:F3}");
-            GUI.Label(new Rect(10, 90, 200, 20), $"Spawn Offset: {(spawnOffsets.Length > 0 ? spawnOffsets[0].ToString("F3") : "N/A")}");
-        }
-    }
-
-    private void CreateDebugLines()
-    {
-        if (spawnPoints == null || hitPoints == null) return;
-
-        for (int i = 0; i < spawnPoints.Length; i++)
-        {
-            GameObject lineObject = new GameObject($"DebugLine_{i}");
-            LineRenderer line = lineObject.AddComponent<LineRenderer>();
-            line.positionCount = 2;
-            line.SetPosition(0, spawnPoints[i].position);
-            line.SetPosition(1, hitPoints[i].position);
-            line.startWidth = 0.1f;
-            line.endWidth = 0.1f;
-
-            GameObject hitMarker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            hitMarker.transform.position = hitPoints[i].position;
-            hitMarker.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
-            hitMarker.name = $"HitMarker_{i}";
-        }
-    }
-
-    public float GetCurrentSongTime()
-    {
-        return songPosition;
-    }
-
-    void OnDrawGizmos()
-    {
-        if (spawnPoints == null || hitPoints == null) return;
-
-        for (int i = 0; i < spawnPoints.Length; i++)
-        {
-            if (spawnPoints[i] != null && hitPoints[i] != null)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawLine(spawnPoints[i].position, hitPoints[i].position);
-
-                Gizmos.color = Color.green;
-                Gizmos.DrawWireSphere(spawnPoints[i].position, 0.3f);
-                Gizmos.color = Color.red;
-                Gizmos.DrawWireSphere(hitPoints[i].position, 0.3f);
-            }
-        }
     }
 
     public void AddNote(Note note)
     {
         notes.Add(note);
-        if (debugMode)
-        {
-            Debug.Log($"Added Note - Track: {note.trackIndex}, StartTime: {note.startTime}");
-        }
+        Debug.Log($"[NoteManager] Added note - Track: {note.trackIndex}, Time: {note.startTime}");
     }
 
     public void SetSpeed(float newSpeed)
     {
         speed = newSpeed;
         CalculateSpawnOffsets();
-    }
-
-    public void AdjustAudioLatency(float latency)
-    {
-        audioLatency = latency;
+        Debug.Log($"[NoteManager] Speed updated to {newSpeed}");
     }
 
     private void UpdateEffects()
     {
         if (sequenceData?.effectTrack == null || effectManager == null)
         {
-            if (debugMode) Debug.LogWarning("Missing effect dependencies");
+            if (debugMode) Debug.Log("[NoteManager] Skip effects update - missing dependencies");
             return;
         }
 
@@ -293,7 +277,7 @@ public class NoteManager : MonoBehaviour
             {
                 if (debugMode)
                 {
-                    Debug.Log($"Triggering effect {effectValue} at beat {currentBeat}, time: {songPosition:F2}");
+                    Debug.Log($"[NoteManager] Trigger effect {effectValue} at beat {currentBeat}");
                 }
                 TriggerEffect(effectValue);
             }
@@ -302,6 +286,7 @@ public class NoteManager : MonoBehaviour
 
     private void OnDisable()
     {
+        Debug.Log("[NoteManager] OnDisable called");
         if (effectManager != null)
         {
             effectManager.ResetEffects();
@@ -311,5 +296,16 @@ public class NoteManager : MonoBehaviour
         {
             audioSource.Stop();
         }
+    }
+
+    public float GetCurrentSongTime()
+    {
+        return songPosition;
+    }
+
+    private void OnDestroy()
+    {
+        Debug.Log("[NoteManager] OnDestroy called");
+        ClearAll();
     }
 }
