@@ -156,10 +156,10 @@ public class RhythmGameController : MonoBehaviour
 
     private string GetGradeFromAccuracy(float accuracy)
     {
-        if (accuracy >= 95) return "S";
-        else if (accuracy >= 90) return "A";
-        else if (accuracy >= 80) return "B";
-        else if (accuracy >= 70) return "C";
+        if (accuracy >= 0.95) return "S";
+        else if (accuracy >= 0.90) return "A";
+        else if (accuracy >= 0.80) return "B";
+        else if (accuracy >= 0.70) return "C";
         else return "D";
     }
 
@@ -499,10 +499,10 @@ public class RhythmGameController : MonoBehaviour
         if (gradeText != null)
         {
             string grade;
-            if (accuracy >= 95) grade = "S";
-            else if (accuracy >= 90) grade = "A";
-            else if (accuracy >= 80) grade = "B";
-            else if (accuracy >= 70) grade = "C";
+            if (accuracy >= 0.95) grade = "S";
+            else if (accuracy >= 0.80) grade = "A";
+            else if (accuracy >= 0.70) grade = "B";
+            else if (accuracy >= 0.60) grade = "C";
             else grade = "D";
 
             gradeText.text = $"Grade: {grade}";
